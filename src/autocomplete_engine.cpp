@@ -1,5 +1,6 @@
 #include "trieste/autocomplete_engine.hpp"
 
+#include <algorithm>
 #include <cctype>
 #include <fstream>
 #include <stdexcept>
@@ -103,23 +104,75 @@ void AutocompleteEngine::loadCorpus(const std::string& filePath) {
 
 std::vector<ScoredTerm> AutocompleteEngine::getScoredSuggestions(const std::string& inputPrefix,
                                                                  int k,
-                                                                 int maxEditDistance) const {
+                                                                 int maxEditDistance,
+                                                                 QueryStats* stats) const {
     // TODO(M4): std::shared_lock over mutex_ -- reads may run concurrently.
+    QueryStats local;
+    const auto publish = [&local, stats] {
+        if (stats != nullptr) {
+            *stats = local;
+        }
+    };
+
     if (k <= 0) {
+        publish();
         return {};
     }
     const auto limit = static_cast<std::size_t>(k);
-    std::vector<ScoredTerm> results = trie_.topKWithPrefix(normalize(inputPrefix), limit);
+    const std::string prefix = normalize(inputPrefix);
 
-    // TODO(M2): when results.size() < limit, fall back to a bounded edit-distance
-    // walk of the trie (E <= maxEditDistance) and merge the corrections in below
-    // the exact matches. Until then the parameter is accepted and ignored, so the
-    // spec's signature stays stable.
-    (void)maxEditDistance;
+    // Pipeline step 1: exact prefix match. This is the fast default and is all
+    // the overwhelming majority of keystrokes ever need.
+    std::vector<ScoredTerm> results = trie_.topKWithPrefix(prefix, limit);
+    local.exactMatches = results.size();
+
+    if (results.size() >= limit) {
+        publish();
+        return results;  // k satisfied exactly -- the fuzzy walk never runs
+    }
+
+    // Pipeline step 2: typo-tolerant fallback, entered ONLY because the exact
+    // pass came up short.
+    const int budget = std::min(maxEditDistance, kMaxEditDistance);
+    if (budget <= 0) {
+        publish();
+        return results;
+    }
+
+    local.fuzzyRan = true;
+    std::vector<FuzzyMatch> corrections = trie_.fuzzySearch(prefix, budget, &local.fuzzy);
+
+    // De-duplication is complete rather than partial here: because the exact
+    // pass returned FEWER than k, it necessarily returned every term carrying
+    // the prefix, so `results` is the whole exact set and nothing can slip past.
+    const auto alreadyPresent = [&results](const std::string& term) {
+        return std::any_of(results.begin(), results.end(),
+                           [&term](const ScoredTerm& entry) { return entry.term == term; });
+    };
+
+    // Closest corrections first, popularity only as the tie-break. Pruning keeps
+    // this candidate set small.
+    // TODO(M6): a bounded heap would beat a full sort when k is much smaller
+    // than the candidate count -- measure in M5 before bothering.
+    std::sort(corrections.begin(), corrections.end(),
+              [](const FuzzyMatch& lhs, const FuzzyMatch& rhs) { return ranksBefore(lhs, rhs); });
+
+    // Corrections fill only the slots the exact pass left empty, so an exact hit
+    // is never displaced by a typo-match however popular that typo-match is.
+    for (const FuzzyMatch& match : corrections) {
+        if (results.size() >= limit) {
+            break;
+        }
+        if (alreadyPresent(match.term)) {
+            continue;
+        }
+        results.push_back(ScoredTerm{match.term, match.frequency});
+    }
 
     // TODO(M3): if inputPrefix ends on a word boundary, ask the n-gram model for
     // next-token predictions and blend them into the ranking.
 
+    publish();
     return results;
 }
 

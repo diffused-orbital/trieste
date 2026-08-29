@@ -80,12 +80,47 @@ void BM_PrefixTopK(benchmark::State& state) {
 
     std::size_t index = 0;
     for (auto _ : state) {
-        auto results = engine.getSuggestions(prefixes[index++ % prefixes.size()], k);
+        // Edit budget pinned to zero on purpose. These are three-character
+        // probes, so a prefix carries only a handful of the 100k terms and any
+        // k above about 5 would fall short and silently divert into the fuzzy
+        // fallback -- leaving this benchmark measuring M2's path under M1's
+        // name. BM_FuzzyFallback below measures correction deliberately.
+        auto results = engine.getSuggestions(prefixes[index++ % prefixes.size()], k,
+                                             /*maxEditDistance=*/0);
         benchmark::DoNotOptimize(results);
     }
     state.SetItemsProcessed(state.iterations());
 }
 BENCHMARK(BM_PrefixTopK)->Arg(1)->Arg(5)->Arg(20);
+
+/// Six-character probes. At that length an exact prefix hit against a random
+/// dictionary is unlikely, so almost every call falls through to the fuzzy
+/// path -- which is the point: this measures the fallback, not the fast path.
+const std::vector<std::string>& missPrefixes() {
+    static const std::vector<std::string>* prefixes = [] {
+        auto* built = new std::vector<std::string>();
+        WordGenerator generator(0xFACEULL);
+        for (int i = 0; i < 512; ++i) {
+            built->push_back(generator.next().substr(0, 6));
+        }
+        return built;
+    }();
+    return *prefixes;
+}
+
+void BM_FuzzyFallback(benchmark::State& state) {
+    const auto& engine = dictionary();
+    const auto& prefixes = missPrefixes();
+    const int budget = static_cast<int>(state.range(0));
+
+    std::size_t index = 0;
+    for (auto _ : state) {
+        auto results = engine.getSuggestions(prefixes[index++ % prefixes.size()], 5, budget);
+        benchmark::DoNotOptimize(results);
+    }
+    state.SetItemsProcessed(state.iterations());
+}
+BENCHMARK(BM_FuzzyFallback)->Arg(1)->Arg(2);
 
 void BM_InsertQuery(benchmark::State& state) {
     trieste::AutocompleteEngine engine;

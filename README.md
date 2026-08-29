@@ -3,13 +3,13 @@
 An in-memory, thread-safe **autocomplete and fuzzy search engine** in C++20.
 
 Ingests a frequency-weighted corpus and serves per-keystroke suggestions in
-O(L) on the prefix length, ranked Top-K by usage frequency. The roadmap adds
-bounded typo tolerance (edit distance ≤ 2) over the trie, an n-gram context
-model for multi-word input, and a concurrent read path — each stage measured by
-a Google Benchmark suite rather than assumed.
+O(L) on the prefix length, ranked Top-K by usage frequency, falling back to
+bounded typo correction (edit distance ≤ 2) when exact matching comes up short.
+The roadmap adds an n-gram context model for multi-word input and a concurrent
+read path — each stage measured by a Google Benchmark suite rather than assumed.
 
-> **Status: Milestone 1.** The trie, corpus loading, exact prefix search and
-> Top-K ranking are implemented and tested. Fuzzy search, n-grams and
+> **Status: Milestone 2.** The trie, corpus loading, exact prefix search, Top-K
+> ranking and bounded typo correction are implemented and tested. N-grams and
 > concurrency are stubbed behind the public API and marked `TODO(Mx)`. See
 > [PLAN.md](PLAN.md) for the full roadmap.
 
@@ -68,10 +68,24 @@ auto results = engine.getSuggestions("appl", /*k=*/2, /*maxEditDistance=*/1);
 // -> {"application", "apple"}
 ```
 
+Typo correction engages only when exact prefix matching returns fewer than `k`:
+
+```cpp
+engine.insertQuery("hello", 900);
+engine.insertQuery("help", 850);
+
+engine.getSuggestions("heloo", /*k=*/2, /*maxEditDistance=*/2);
+// -> {"hello", "help"}     ED 1 and ED 2 respectively
+engine.getSuggestions("heloo", /*k=*/2, /*maxEditDistance=*/1);
+// -> {"hello"}             "help" is two edits away, outside the budget
+```
+
 `getScoredSuggestions` returns the same ranking with the frequency that earned
-each slot. Terms are normalised on the way in and prefixes on the way out —
-trimmed, lowercased, internal whitespace collapsed — so matching is
-case-insensitive and symmetric.
+each slot, and optionally reports a `QueryStats` — how many exact matches were
+found, whether the fuzzy path ran at all, and how many subtrees it pruned.
+Terms are normalised on the way in and prefixes on the way out — trimmed,
+lowercased, internal whitespace collapsed — so matching is case-insensitive and
+symmetric.
 
 ### Corpus format
 
@@ -105,6 +119,21 @@ candidates costs O(n log k) time and O(k) space instead of sorting all n.
 Ranking is frequency-descending with a lexicographic tie-break, so identical
 input always produces identical output.
 
+**Typo correction by DP row over the trie.** When exact matching returns fewer
+than k, one Levenshtein DP row is carried down each trie edge — a node standing
+for string S holds that grid's column for S, so stepping to a child fills in
+just one new column. Shared prefixes therefore pay the cost once on behalf of
+every completion below them.
+
+The pruning is what makes it sub-O(N): every cell of a child's row is at least
+the minimum cell of its parent's, so once that minimum exceeds the edit budget
+no descendant can come back inside it and the entire subtree is abandoned
+unexamined. A term matches if *any* prefix of it is within budget, which means
+the engine corrects the typo and then completes from the corrected point —
+`"helo"` reaches `"helicopter"`, which no whole-word distance would find.
+Corrections fill only the slots exact matching left empty, ranked by distance
+first and frequency second, so an exact hit is never displaced.
+
 ## Layout
 
 ```
@@ -121,7 +150,7 @@ data/              sample corpus
 | | Milestone | Status |
 |---|---|---|
 | M1 | Scaffold, Trie, exact prefix, Top-K min-heap | ✅ done |
-| M2 | Fuzzy search — bounded edit distance (E ≤ 2) over the trie | planned |
+| M2 | Fuzzy search — bounded edit distance (E ≤ 2) over the trie | ✅ done |
 | M3 | Bigram/trigram Markov model for next-token prediction | planned |
 | M4 | Concurrency — `std::shared_mutex` read/write path | planned |
 | M5 | Benchmark suite — p50/p95/p99, multi-threaded QPS, naive vs. pruned | planned |

@@ -59,10 +59,25 @@ public:
 
     // ---- Extras (not in the spec contract; used by tests, CLI, benchmarks) --
 
-    /// Same as getSuggestions but keeps the frequency that earned each slot.
+    /// The largest edit budget the engine honours, per the spec's E <= 2.
+    /// Larger values passed to getSuggestions are clamped to this.
+    static constexpr int kMaxEditDistance = 2;
+
+    /// Diagnostics for one query. Filled in only when the caller supplies a
+    /// destination -- nothing is cached on the engine, so queries stay const and
+    /// remain safe to run concurrently once M4 adds the shared lock.
+    struct QueryStats {
+        std::size_t exactMatches = 0;  ///< how many the exact prefix pass produced
+        bool fuzzyRan = false;         ///< false when the exact pass already met k
+        Trie::FuzzyStats fuzzy;        ///< zeroed unless fuzzyRan
+    };
+
+    /// Same as getSuggestions but keeps the frequency that earned each slot, and
+    /// optionally reports how the answer was reached.
     [[nodiscard]] std::vector<ScoredTerm> getScoredSuggestions(const std::string& inputPrefix,
                                                                int k = 5,
-                                                               int maxEditDistance = 2) const;
+                                                               int maxEditDistance = 2,
+                                                               QueryStats* stats = nullptr) const;
 
     [[nodiscard]] std::size_t termCount() const noexcept;
     [[nodiscard]] std::size_t nodeCount() const noexcept;

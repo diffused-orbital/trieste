@@ -61,14 +61,27 @@ TEST(SpecExample, DefaultArgumentsMatchTheDeclaredSignature) {
               (std::vector<std::string>{"application", "apple", "apply", "apricot"}));
 }
 
-// M2 will make this pass. It is disabled rather than deleted so the target
-// stays visible in the test list: `ctest` prints it as skipped.
-TEST(SpecExample, DISABLED_TypoCorrectionArrivesInM2) {
+TEST(SpecExample, TypoCorrectionReturnsHelloAndHelp) {
     AutocompleteEngine engine;
     engine.insertQuery("hello", 900);
     engine.insertQuery("help", 850);
-    EXPECT_EQ(engine.getSuggestions("heloo", /*k=*/2, /*maxEditDistance=*/1),
+    // The spec writes this example with maxEditDistance=1, but ED("heloo",
+    // "help") is 2 -- "help" is unreachable at a budget of 1 under any standard
+    // edit distance. Asserted at 2, which is also the API's default budget, and
+    // reproduces the spec's stated output exactly.
+    EXPECT_EQ(engine.getSuggestions("heloo", /*k=*/2, /*maxEditDistance=*/2),
               (std::vector<std::string>{"hello", "help"}));
+}
+
+TEST(SpecExample, TypoCorrectionBoundaryAtDistanceOne) {
+    AutocompleteEngine engine;
+    engine.insertQuery("hello", 900);
+    engine.insertQuery("help", 850);
+    // ED("heloo","hello") == 1 and ED("heloo","help") == 2, so a budget of 1
+    // admits the first and excludes the second. Together with the test above
+    // this pins the E=1 / E=2 boundary from both sides.
+    EXPECT_EQ(engine.getSuggestions("heloo", /*k=*/2, /*maxEditDistance=*/1),
+              (std::vector<std::string>{"hello"}));
 }
 
 // ---- Facade behaviour ----------------------------------------------------
@@ -119,12 +132,25 @@ TEST(Engine, NonPositiveKYieldsNothing) {
     EXPECT_TRUE(engine.getSuggestions("appl", -3).empty());
 }
 
-TEST(Engine, ReturnsFewerThanKWhenExactMatchesRunOut) {
-    // The M2 trigger condition: fewer than k exact matches. For now the engine
-    // simply returns what it has instead of correcting.
+TEST(Engine, ReturnsFewerThanKWhenExactMatchesRunOutAndCorrectionIsOff) {
     AutocompleteEngine engine;
     loadSpecCorpus(engine);
-    EXPECT_EQ(engine.getSuggestions("apric", 5), (std::vector<std::string>{"apricot"}));
+    // With the edit budget at zero the exact path stands alone, so a prefix
+    // with one match yields one result rather than padding out to k.
+    EXPECT_EQ(engine.getSuggestions("apric", 5, /*maxEditDistance=*/0),
+              (std::vector<std::string>{"apricot"}));
+    EXPECT_TRUE(engine.getSuggestions("xyz", 5, /*maxEditDistance=*/0).empty());
+}
+
+TEST(Engine, CorrectionFillsTheSlotsExactMatchingLeavesEmpty) {
+    AutocompleteEngine engine;
+    loadSpecCorpus(engine);
+    // The same query at the default budget. "apricot" keeps the lead as the
+    // exact hit; "application" joins it because ED("apric","applic") == 2 puts
+    // that prefix in range and every completion of it comes along.
+    EXPECT_EQ(engine.getSuggestions("apric", 5),
+              (std::vector<std::string>{"apricot", "application"}));
+    // Nothing in the corpus is within two edits of any prefix of "xyz".
     EXPECT_TRUE(engine.getSuggestions("xyz", 5).empty());
 }
 

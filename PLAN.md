@@ -38,19 +38,66 @@ not reshape it.
 - *Normalisation:* trim, lowercase ASCII, collapse internal whitespace runs —
   applied symmetrically on insert and on query.
 
-## M2 — Fuzzy search, bounded edit distance (E ≤ 2)
+## M2 — Fuzzy search, bounded edit distance (E ≤ 2)  ✅ done
 
-Triggered only when exact prefix matches < K.
+One Levenshtein DP row carried down each trie edge, with subtree pruning.
+Fires only when exact prefix matches < K, so the exact path stays the fast
+default.
 
-- Start with the **DP-row-over-Trie** approach: carry one Levenshtein DP row
-  down each trie edge, prune a subtree as soon as `min(row) > maxEditDistance`.
-  Correct, easy to reason about, and already asymptotically far better than
-  scanning the dictionary.
-- Keep a true **Levenshtein Automaton** as a later optimisation, benchmarked
-  head-to-head against the DP-row version rather than assumed faster.
-- Merge corrections *below* exact matches in the ranking.
-- Turns on the disabled `SpecExample.TypoCorrectionArrivesInM2` test:
-  `getSuggestions("heloo", k=2, maxEditDistance=1)` → `["hello", "help"]`.
+**Decisions taken**
+
+- *Match semantics: fuzzy-prefix, "correct then complete".* A term matches if
+  ANY prefix of it is within E edits of the query, and its reported distance is
+  the smallest such prefix distance. Chosen over whole-term ED, which cannot
+  complete (`"aple"` would reach `"apple"` and stop, never `"application"`) and
+  is wrong for a per-keystroke engine where the user is mid-word. Subsumes
+  whole-term matching.
+- *The prune.* Every cell of a child's row is ≥ the minimum cell of the parent
+  row, because each DP transition either copies a neighbouring cell or adds one
+  to it. So once `min(row) > E`, no descendant can bring `row[m]` back inside
+  the budget and the whole subtree is abandoned unexamined. This is what makes
+  the walk sub-O(N).
+- *Short-query guard.* Fuzzy declines when `|query| <= E`. At that point the
+  EMPTY prefix is itself within budget, every term qualifies, and the search
+  degenerates into a full scan. See the open question below.
+- *Merge order: exact block first.* Exact hits keep their slots in frequency
+  order; corrections fill only the remainder, sorted by distance ascending then
+  frequency descending. A typo-match can never displace a real prefix hit, so
+  typing another character never pushes the wanted term down the list.
+- *Row storage.* One DP row per depth in a `std::deque`, reused across the
+  traversal. A deque rather than a vector because growing it must not
+  invalidate row references held by frames further up the recursion.
+
+**Corrections applied to the original spec** (it was AI-generated from a
+one-line idea and is a loose brief, not authoritative):
+
+- The Levenshtein Automaton is NOT built. For E ≤ 2 the DP-row walk with
+  pruning is already sub-O(N); a precomputed automaton is over-engineering.
+  Left as an optional M6 benchmark comparison, if it is worth doing at all.
+- "Out-of-order words" is out of scope — unscoped, much harder, and nothing in
+  the API or the worked examples supports it.
+- The spec's typo example states `maxEditDistance=1`, but `ED("heloo","help")`
+  is 2, so `"help"` is unreachable at a budget of 1 under any standard edit
+  distance. The example's *output* is right and its *parameter* is off by one;
+  it is asserted at E=2 (also the API default), with an E=1 test pinning the
+  other side of the boundary.
+- Latency figures are measurement goals to report against, not pass/fail gates.
+
+**Measured on a 100k random-word dictionary** (`trieste_bench`, MinGW g++ 15.2,
+Release). Random strings are a pathological corpus — no real prefix structure —
+so treat these as an upper bound rather than a forecast:
+
+| Path | Time |
+|---|---|
+| Exact prefix Top-K (E=0), k=1..20 | 1.5–2.9 µs |
+| Fuzzy fallback, E=1, 6-char query | ~101 µs |
+| Fuzzy fallback, E=2, 6-char query | ~2.6 ms |
+
+**Open question for M5/M6:** E=2 on a short query is the expensive case, and
+`|query| > E` is a weak guard — at `|query| = 3, E = 2` the walk still goes very
+wide. Graduated fuzziness (E=0 for ≤2 chars, E=1 for 3–4, E=2 for ≥5, which is
+what Elasticsearch's `AUTO` does) would bound it properly. Deferred rather than
+guessed: it changes result semantics, so it should be driven by M5 numbers.
 
 ## M3 — N-gram context
 
