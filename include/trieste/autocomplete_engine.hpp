@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <shared_mutex>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -89,11 +90,11 @@ public:
     [[nodiscard]] static std::string normalize(std::string_view text);
 
 private:
+    mutable std::shared_mutex mutex_;  // M4: shared on read, exclusive on write
     Trie trie_;
 
     // TODO(M3): NgramModel ngrams_;  bigram/trigram transition counts.
-    // TODO(M4): mutable std::shared_mutex mutex_;  shared on read, exclusive on
-    //           write, guarding trie_ and ngrams_ together.
+    //           When added, it must be guarded by the same mutex_ as trie_.
 };
 
 }  // namespace trieste

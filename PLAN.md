@@ -105,13 +105,52 @@ guessed: it changes result semantics, so it should be driven by M5 numbers.
 - Multi-word input: `"san "` → `"francisco"`, ranked by transition probability.
 - Blended into `getSuggestions` when the input ends on a word boundary.
 
-## M4 — Concurrency
+## M4 — Concurrency  ✅ done
 
-- Start with **one `std::shared_mutex`**: shared lock on read, exclusive on
-  write, guarding the trie and the n-gram model together.
-- Only go fine-grained (per-node locking, sharding, or a lock-free read path)
-  **if the M5 benchmarks actually show contention.** Note that
-  `AutocompleteEngine` is already non-movable for exactly this reason.
+One `std::shared_mutex` guards the trie (and, when added, the n-gram model).
+Shared lock on every read path; exclusive lock on every write path.  The
+engine was already non-movable since M1 precisely to anticipate this.
+
+**Decisions taken**
+
+- *Single coarse mutex.* Per-node locking or lock-free structures are deferred
+  until M5 measures actual contention.  A shared_mutex costs nothing under
+  read-dominated load (many readers hold it simultaneously) and is much
+  simpler to audit for correctness.
+- *I/O outside the lock in `loadCorpus`.* The corpus file is parsed into a
+  local `vector<pair<string,int>>` with no lock held; the lock is acquired
+  once for the batch insert.  File I/O can be slow (disk, network drive) and
+  blocking readers for its duration would be a needless pessimisation.
+  The original implementation called `insertQuery` per line, which would
+  have acquired and released the lock once per entry — that is replaced by a
+  single batch critical section.
+- *`mutable` mutex.* Declared `mutable` so that const read-functions
+  (`getScoredSuggestions`, `termCount`, `nodeCount`) can acquire the shared
+  lock without a `const_cast`.  This is the standard C++ idiom for
+  internal synchronisation primitives on logically-const objects.
+- *`termCount` / `nodeCount` added to the lock scope.* Although `std::size_t`
+  loads are atomic on all supported architectures in practice, the C++ abstract
+  machine requires a happens-before edge; the shared lock provides it without
+  cost under contention-free conditions.
+
+**Test suite added** — `tests/concurrency_test.cpp`:
+
+| Test | What it checks |
+|---|---|
+| `ConcurrentReads` | 16 threads × 200 reads; top result always correct |
+| `ConcurrentWrites` | 8 threads × 100 inserts; frequency sum preserved exactly |
+| `ConcurrentReadWriteMix` | 6 readers + 4 writers simultaneously; no crash, correct final count |
+| `LoadCorpusConcurrent` | two `loadCorpus` calls on separate threads; no deadlock, all terms present |
+| `MetricsUnderConcurrentWrites` | `termCount`/`nodeCount` callable from any thread |
+
+Run under **ThreadSanitizer** (TSAN) for definitive data-race detection:
+
+```sh
+# Only on Linux/macOS with GCC or Clang — TSAN is not available on MSVC/MinGW
+cmake --preset unix -DCMAKE_CXX_FLAGS="-fsanitize=thread -g"
+cmake --build --preset unix
+ctest --preset unix
+```
 
 ## M5 — Benchmark suite
 

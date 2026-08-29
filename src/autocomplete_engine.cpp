@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <fstream>
+#include <shared_mutex>
 #include <stdexcept>
 #include <string>
 
@@ -59,17 +60,21 @@ std::string AutocompleteEngine::normalize(std::string_view text) {
 }
 
 void AutocompleteEngine::insertQuery(const std::string& query, int weight) {
-    // TODO(M4): std::unique_lock over mutex_ -- exclusive, this mutates.
+    std::unique_lock lock(mutex_);  // exclusive — mutates the trie
     trie_.insert(normalize(query), weight);
     // TODO(M3): feed the normalised token stream into the n-gram model too.
 }
 
 void AutocompleteEngine::loadCorpus(const std::string& filePath) {
+    // Parse the file without holding the lock so we don't block readers while
+    // doing potentially slow I/O.  We accumulate (term, weight) pairs and then
+    // acquire the write lock once to insert them all.
     std::ifstream input(filePath);
     if (!input) {
         throw std::runtime_error("trieste: cannot open corpus file: " + filePath);
     }
 
+    std::vector<std::pair<std::string, int>> entries;
     std::string line;
     while (std::getline(input, line)) {
         if (!line.empty() && line.back() == '\r') {
@@ -98,7 +103,13 @@ void AutocompleteEngine::loadCorpus(const std::string& filePath) {
                 term = view.substr(0, split);
             }
         }
-        insertQuery(std::string(term), weight);
+        entries.emplace_back(normalize(std::string(term)), weight);
+    }
+
+    // Single write-lock acquisition for the whole batch.
+    std::unique_lock lock(mutex_);  // exclusive — mutates the trie
+    for (const auto& [term, weight] : entries) {
+        trie_.insert(term, weight);
     }
 }
 
@@ -106,7 +117,7 @@ std::vector<ScoredTerm> AutocompleteEngine::getScoredSuggestions(const std::stri
                                                                  int k,
                                                                  int maxEditDistance,
                                                                  QueryStats* stats) const {
-    // TODO(M4): std::shared_lock over mutex_ -- reads may run concurrently.
+    std::shared_lock lock(mutex_);  // shared — multiple readers may run concurrently
     QueryStats local;
     const auto publish = [&local, stats] {
         if (stats != nullptr) {
@@ -188,7 +199,14 @@ std::vector<std::string> AutocompleteEngine::getSuggestions(const std::string& i
     return terms;
 }
 
-std::size_t AutocompleteEngine::termCount() const noexcept { return trie_.termCount(); }
-std::size_t AutocompleteEngine::nodeCount() const noexcept { return trie_.nodeCount(); }
+std::size_t AutocompleteEngine::termCount() const noexcept {
+    std::shared_lock lock(mutex_);
+    return trie_.termCount();
+}
+
+std::size_t AutocompleteEngine::nodeCount() const noexcept {
+    std::shared_lock lock(mutex_);
+    return trie_.nodeCount();
+}
 
 }  // namespace trieste

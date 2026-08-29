@@ -13,9 +13,14 @@ FetchContent_MakeAvailable(googletest)
 add_executable(trieste_tests
     trie_test.cpp
     engine_test.cpp
-    fuzzy_test.cpp)
+    fuzzy_test.cpp
+    concurrency_test.cpp)
 
-target_link_libraries(trieste_tests PRIVATE trieste::trieste GTest::gtest_main)
+# Threads is needed for std::thread / std::shared_mutex on Linux (pthreads).
+# On MSVC and MinGW-w64 this is a no-op because the threading primitives are
+# already part of the default link set.
+find_package(Threads REQUIRED)
+target_link_libraries(trieste_tests PRIVATE trieste::trieste GTest::gtest_main Threads::Threads)
 
 # Lets the tests find the shipped sample corpus without depending on the working
 # directory ctest happens to run them from.
