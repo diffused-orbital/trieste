@@ -93,11 +93,9 @@ next-token predictions into the results:
 
 ```cpp
 // After loading a corpus with "san francisco 900" and "san diego 450":
-engine.getSuggestions("san ");
-// -> {"san francisco", "san diego"}  (trie prefix hits first)
-
-engine.getSuggestions("san francisco ");
-// -> {"san francisco", ...}  next token predictions after "san francisco"
+engine.getSuggestions("san ", 4);
+// -> {"san francisco", "san diego", "francisco", "diego"}
+//     (trie prefix completions first, then n-gram next-token predictions)
 ```
 
 ### Corpus format

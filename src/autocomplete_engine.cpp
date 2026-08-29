@@ -170,14 +170,13 @@ std::vector<ScoredTerm> AutocompleteEngine::getScoredSuggestions(const std::stri
         results.push_back(ScoredTerm{match.term, match.frequency});
     }
 
-    // M3: When the input ends on a word boundary (trailing space), ask the
-    // n-gram model for next-token predictions and blend them into the results.
-    // A trailing space means the user has finished typing a word and is
-    // expecting completions of what comes next, not completions of the last
-    // word itself.  The trie pass above will have returned any multi-word
-    // entries that start with the full prefix; the n-gram pass adds context-
-    // driven predictions for the next token that the trie alone cannot produce.
-    const bool wordBoundary = !prefix.empty() && prefix.back() == ' ';
+    // M3: When the input ends on a word boundary (trailing whitespace on the
+    // raw input), ask the n-gram model for next-token predictions and blend
+    // them into the results. A trailing space means the user has finished
+    // typing a word and is expecting completions of what comes next, not
+    // completions of the last word itself.
+    const bool wordBoundary =
+        !inputPrefix.empty() && isSpace(static_cast<unsigned char>(inputPrefix.back()));
     if (wordBoundary && results.size() < limit) {
         const auto predictions = ngrams_.predict(prefix, limit - results.size());
         for (const ScoredTerm& p : predictions) {

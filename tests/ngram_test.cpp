@@ -142,100 +142,88 @@ TEST(NgramModel, KCapIsRespected) {
 
 // ---- Engine-level n-gram blending tests -----------------------------------
 
-TEST(EngineNgram, TrailingSpaceTriggersPrediction) {
+TEST(EngineNgram, TrailingSpaceBlendsPredictedNextTokens) {
     AutocompleteEngine engine;
-    engine.insertQuery("san francisco", 900);
-    engine.insertQuery("san diego", 450);
+    engine.insertQuery("hello world", 100);
 
-    // "san " — exact trie matches exist ("san francisco", "san diego") so the
-    // n-gram blending may not run, but the results must include them.
-    const auto results = engine.getSuggestions("san ", 5);
-    ASSERT_FALSE(results.empty());
-    EXPECT_NE(std::find(results.begin(), results.end(), "san francisco"),
-              results.end());
-    EXPECT_NE(std::find(results.begin(), results.end(), "san diego"),
-              results.end());
-}
-
-TEST(EngineNgram, NgramFillsWhenTrieHasNoTermsWithPrefix) {
-    AutocompleteEngine engine;
-    // Insert only "go left" and "go right"; there is no trie term that starts
-    // with "go " followed by nothing (i.e., the prefix "go " won't match any
-    // stored term that is exactly "go ").  Actually "go left" does start with
-    // "go ", so trie will return them. Let's use a completely unrelated prefix.
-    engine.insertQuery("go left", 500);
-    engine.insertQuery("go right", 300);
-
-    // Query the engine with just "go " — trie can find "go left" and "go right"
-    // as exact prefix matches.
-    const auto results = engine.getSuggestions("go ", 5);
-    ASSERT_FALSE(results.empty());
-    EXPECT_NE(std::find(results.begin(), results.end(), "go left"), results.end());
-    EXPECT_NE(std::find(results.begin(), results.end(), "go right"), results.end());
-}
-
-TEST(EngineNgram, NgramPredictsFillsSlotsBeyondTrieHits) {
-    AutocompleteEngine engine;
-    // Only "new york" in the trie, but we also trained on "new york city"
-    // so the n-gram knows "city" follows "new york".
-    engine.insertQuery("new york", 500);
-    engine.insertQuery("new york city", 600);
-
-    // With k=5, trie gives {"new york city", "new york"} (2 hits).
-    // N-gram: after "new york " the trigram/bigram says "city" → but "city"
-    // is already in the trie results (as part of "new york city"), so no
-    // duplication should occur.
-    const auto results = engine.getSuggestions("new york ", 5);
-    const auto cityCount = std::count(results.begin(), results.end(), "new york city");
-    EXPECT_EQ(cityCount, 1);  // must not appear twice
+    // "hello " has a trailing space (word boundary), so the engine returns
+    // the trie prefix completion "hello world" AND the n-gram predicted token "world".
+    const auto results = engine.getSuggestions("hello ", 5);
+    EXPECT_EQ(results, (std::vector<std::string>{"hello world", "world"}));
 }
 
 TEST(EngineNgram, NoBlendingWithoutTrailingSpace) {
     AutocompleteEngine engine;
-    engine.insertQuery("san francisco", 900);
+    engine.insertQuery("hello world", 100);
 
-    // Without the trailing space, n-gram should NOT kick in; the engine
-    // should still return trie prefix matches.
-    const auto results = engine.getSuggestions("san", 5);
-    // "san francisco" starts with "san", so the trie still returns it.
-    EXPECT_NE(std::find(results.begin(), results.end(), "san francisco"),
-              results.end());
+    // Without the trailing space, n-gram does NOT kick in: only trie prefix hits.
+    const auto results = engine.getSuggestions("hello", 5);
+    EXPECT_EQ(results, (std::vector<std::string>{"hello world"}));
+    EXPECT_EQ(std::find(results.begin(), results.end(), "world"), results.end());
+}
+
+TEST(EngineNgram, PredictsMultipleNextTokensRankedByFrequency) {
+    AutocompleteEngine engine;
+    engine.insertQuery("go left", 500);
+    engine.insertQuery("go right", 300);
+    engine.insertQuery("go home", 100);
+
+    // Query "go " with k=6: exact trie completions fill first, followed by
+    // the n-gram next-token predictions in frequency order.
+    const auto results = engine.getSuggestions("go ", 6);
+    EXPECT_EQ(results, (std::vector<std::string>{
+        "go left", "go right", "go home", "left", "right", "home"
+    }));
+}
+
+TEST(EngineNgram, TrigramTakesPrecedenceInEngine) {
+    AutocompleteEngine engine;
+    engine.insertQuery("new york city", 1000);
+    engine.insertQuery("york times", 9999);
+
+    // Query "new york ":
+    // 1. Trie exact prefix -> "new york city"
+    // 2. Trigram context ("new", "york") -> "city"
+    // 3. Bigram context ("york") -> "times"
+    const auto results = engine.getSuggestions("new york ", 5);
+    EXPECT_EQ(results, (std::vector<std::string>{"new york city", "city", "times"}));
 }
 
 TEST(EngineNgram, KCapIsRespectedAfterBlending) {
     AutocompleteEngine engine;
-    // Load several multi-word terms so both trie and ngram have candidates.
-    for (const char* t : {"go left", "go right", "go up", "go down", "go forward"}) {
-        engine.insertQuery(t, 100);
-    }
-    const auto results = engine.getSuggestions("go ", 3);
-    EXPECT_LE(results.size(), 3u);
+    engine.insertQuery("hello world", 100);
+
+    // k=1: capped to 1 result (trie hit only)
+    EXPECT_EQ(engine.getSuggestions("hello ", 1),
+              (std::vector<std::string>{"hello world"}));
+
+    // k=2: capped to 2 results (trie hit + 1 n-gram prediction)
+    EXPECT_EQ(engine.getSuggestions("hello ", 2),
+              (std::vector<std::string>{"hello world", "world"}));
 }
 
-TEST(EngineNgram, LoadCorpusTrainsNgrams) {
+TEST(EngineNgram, LoadCorpusTrainsNgramsAndYieldsBarePredictions) {
     AutocompleteEngine engine;
-    // Use the shipped sample corpus — it contains multi-word terms.
     engine.loadCorpus(std::string(TRIESTE_DATA_DIR) + "/sample_corpus.txt");
 
-    // "san " should yield "san francisco" and/or "san diego" from the trie;
-    // we just check the engine doesn't crash and returns something plausible.
+    // sample_corpus.txt has "san francisco 900" and "san diego 450".
+    // Querying "san " with k=5 must return the trie matches AND the bare
+    // predicted tokens "francisco" and "diego".
     const auto results = engine.getSuggestions("san ", 5);
-    EXPECT_FALSE(results.empty());
+    EXPECT_NE(std::find(results.begin(), results.end(), "san francisco"), results.end());
+    EXPECT_NE(std::find(results.begin(), results.end(), "san diego"), results.end());
+    EXPECT_NE(std::find(results.begin(), results.end(), "francisco"), results.end());
+    EXPECT_NE(std::find(results.begin(), results.end(), "diego"), results.end());
 }
 
-TEST(EngineNgram, NgramDoesNotDuplicateExactTrieHits) {
+TEST(EngineNgram, DeDuplicatesPredictions) {
     AutocompleteEngine engine;
-    engine.insertQuery("san francisco", 900);
-    engine.insertQuery("san diego", 450);
+    engine.insertQuery("hello world", 100);
+    engine.insertQuery("hello world", 200);
 
-    // Both appear as trie hits. The n-gram model would also suggest "francisco"
-    // and "diego" as next tokens after "san", but "san francisco" / "san diego"
-    // are already in results — de-duplication must prevent any repeat.
-    const auto results = engine.getSuggestions("san ", 10);
-    for (const auto& r : results) {
-        EXPECT_EQ(std::count(results.begin(), results.end(), r), 1)
-            << "Duplicate entry: " << r;
-    }
+    const auto results = engine.getSuggestions("hello ", 5);
+    EXPECT_EQ(results, (std::vector<std::string>{"hello world", "world"}));
+    EXPECT_EQ(std::count(results.begin(), results.end(), "world"), 1);
 }
 
 }  // namespace
