@@ -200,12 +200,12 @@ std::vector<std::string> AutocompleteEngine::getSuggestions(const std::string& i
     return terms;
 }
 
-std::size_t AutocompleteEngine::termCount() const noexcept {
+std::size_t AutocompleteEngine::termCount() const {
     std::shared_lock lock(mutex_);
     return trie_.termCount();
 }
 
-std::size_t AutocompleteEngine::nodeCount() const noexcept {
+std::size_t AutocompleteEngine::nodeCount() const {
     std::shared_lock lock(mutex_);
     return trie_.nodeCount();
 }

@@ -121,11 +121,30 @@ TEST(Concurrency, ConcurrentReads) {
 TEST(Concurrency, ConcurrentWrites) {
     AutocompleteEngine engine;
 
-    constexpr int kWriters   = 8;
-    constexpr int kIters     = 100;
-    constexpr int kExpected  = kWriters * kIters;
+    // Seed the term up front so every thread below only bumps an ALREADY
+    // EXISTING node's frequency. An unsynchronised run then fails as a clean
+    // lost-update assertion rather than a structural crash, which is both
+    // deterministic and far easier to diagnose.
+    engine.insertQuery("ping", 1);
+
+    // The workload has to be large enough, and start closely enough together,
+    // that an unlocked `frequency += weight` actually drops increments. The
+    // original 8x100 finished before the threads meaningfully overlapped and
+    // passed even with every lock removed, so it proved nothing.
+    constexpr int kWriters  = 8;
+    constexpr int kIters    = 20000;
+    constexpr int kExpected = 1 + kWriters * kIters;
+
+    std::atomic<int> ready{0};
 
     runConcurrently(kWriters, [&](int /*id*/) {
+        // Spin barrier: no thread starts writing until all of them have
+        // arrived, so the increments genuinely contend instead of running
+        // back-to-back as the threads are still being spawned.
+        ready.fetch_add(1, std::memory_order_acq_rel);
+        while (ready.load(std::memory_order_acquire) < kWriters) {
+            std::this_thread::yield();
+        }
         for (int i = 0; i < kIters; ++i) {
             engine.insertQuery("ping", 1);
         }
@@ -133,6 +152,7 @@ TEST(Concurrency, ConcurrentWrites) {
 
     const auto scored = engine.getScoredSuggestions("ping", 1);
     ASSERT_EQ(scored.size(), 1u);
+    // Exact equality is the whole point: a single lost increment fails here.
     EXPECT_EQ(scored[0].frequency, kExpected);
 }
 
@@ -150,15 +170,26 @@ TEST(Concurrency, ConcurrentReadWriteMix) {
 
     constexpr int kReaders  = 6;
     constexpr int kWriters  = 4;
-    constexpr int kIters    = 150;
+    constexpr int kIters    = 4000;
+    constexpr int kThreads  = kReaders + kWriters;
 
     std::atomic<int> readErrors{0};
+    // Shared spin barrier across readers AND writers, so reads genuinely
+    // overlap writes rather than trailing behind thread spawn.
+    std::atomic<int> ready{0};
+    const auto waitForAll = [&ready] {
+        ready.fetch_add(1, std::memory_order_acq_rel);
+        while (ready.load(std::memory_order_acquire) < kThreads) {
+            std::this_thread::yield();
+        }
+    };
 
     // Launch readers.
     std::vector<std::thread> readers;
     readers.reserve(kReaders);
     for (int i = 0; i < kReaders; ++i) {
         readers.emplace_back([&] {
+            waitForAll();
             for (int j = 0; j < kIters; ++j) {
                 // Must not crash; result may vary depending on write progress.
                 auto r = engine.getSuggestions("za", 5);
@@ -176,6 +207,7 @@ TEST(Concurrency, ConcurrentReadWriteMix) {
     writers.reserve(kWriters);
     for (int i = 0; i < kWriters; ++i) {
         writers.emplace_back([&](int id) {
+            waitForAll();
             for (int j = 0; j < kIters; ++j) {
                 engine.insertQuery("zap", 1);
                 // Also insert a unique word per writer thread so we can count writers.
