@@ -207,9 +207,19 @@ TEST(EngineNgram, LoadCorpusTrainsNgramsAndYieldsBarePredictions) {
     engine.loadCorpus(std::string(TRIESTE_DATA_DIR) + "/sample_corpus.txt");
 
     // sample_corpus.txt has "san francisco 900" and "san diego 450".
-    // Querying "san " with k=5 must return the trie matches AND the bare
-    // predicted tokens "francisco" and "diego".
-    const auto results = engine.getSuggestions("san ", 5);
+    // Querying "san " must return the trie matches AND the bare predicted
+    // tokens "francisco" and "diego".
+    //
+    // k is 6, not 5, for an arithmetic reason: the prefix "san" has FOUR exact
+    // trie hits, because "santa clara" carries it too. Four exact plus the two
+    // predictions asserted below needs six slots; at k=5 only one prediction
+    // could ever fit and this test could not pass however the ranking behaved.
+    //
+    // Six is also the tightest value that still proves the priority fix. It
+    // leaves exactly two free slots, so if fuzzy corrections were still ranked
+    // above predictions they would take both ("bank" is one edit from "san")
+    // and the assertions below would fail.
+    const auto results = engine.getSuggestions("san ", 6);
     EXPECT_NE(std::find(results.begin(), results.end(), "san francisco"), results.end());
     EXPECT_NE(std::find(results.begin(), results.end(), "san diego"), results.end());
     EXPECT_NE(std::find(results.begin(), results.end(), "francisco"), results.end());

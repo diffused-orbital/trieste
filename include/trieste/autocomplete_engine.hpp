@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <shared_mutex>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -80,8 +81,8 @@ public:
                                                                int maxEditDistance = 2,
                                                                QueryStats* stats = nullptr) const;
 
-    [[nodiscard]] std::size_t termCount() const noexcept;
-    [[nodiscard]] std::size_t nodeCount() const noexcept;
+    [[nodiscard]] std::size_t termCount() const;
+    [[nodiscard]] std::size_t nodeCount() const;
 
     /// Normalisation applied to every term on the way in and every prefix on
     /// the way out, so lookups are symmetric: trims the ends, lowercases ASCII,
@@ -90,11 +91,10 @@ public:
     [[nodiscard]] static std::string normalize(std::string_view text);
 
 private:
+    mutable std::shared_mutex mutex_;  // M4: shared on read, exclusive on write
     Trie trie_;
     NgramModel ngrams_;  // M3: bigram/trigram Markov model for next-token prediction.
 
-    // TODO(M4): mutable std::shared_mutex mutex_;  shared on read, exclusive on
-    //           write, guarding trie_ and ngrams_ together.
 };
 
 }  // namespace trieste

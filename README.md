@@ -8,10 +8,10 @@ bounded typo correction (edit distance ≤ 2) when exact matching comes up short
 The roadmap adds an n-gram context model for multi-word input and a concurrent
 read path — each stage measured by a Google Benchmark suite rather than assumed.
 
-> **Status: Milestone 3.** The trie, corpus loading, exact prefix search, Top-K
-> ranking, bounded typo correction, and bigram/trigram next-token prediction are
-> implemented and tested. Concurrency is stubbed behind the public API and marked
-> `TODO(M4)`. See [PLAN.md](PLAN.md) for the full roadmap.
+> **Status: Milestone 4.** The trie, corpus loading, exact prefix search, Top-K
+> ranking, bounded typo correction, bigram/trigram next-token prediction, and the
+> `std::shared_mutex` read/write path are all implemented and tested. See
+> [PLAN.md](PLAN.md) for the full roadmap.
 
 ## Quick start
 
@@ -172,7 +172,7 @@ data/              sample corpus
 | M1 | Scaffold, Trie, exact prefix, Top-K min-heap | ✅ done |
 | M2 | Fuzzy search — bounded edit distance (E ≤ 2) over the trie | ✅ done |
 | M3 | Bigram/trigram Markov model for next-token prediction | ✅ done |
-| M4 | Concurrency — `std::shared_mutex` read/write path | planned |
+| M4 | Concurrency — `std::shared_mutex` read/write path | ✅ done |
 | M5 | Benchmark suite — p50/p95/p99, multi-threaded QPS, naive vs. pruned | planned |
 | M6 | Memory and latency optimisation, driven by M5's numbers | planned |
 
