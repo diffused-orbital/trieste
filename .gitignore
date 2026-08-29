@@ -1,0 +1,83 @@
+# --- Build output -----------------------------------------------------------
+# FetchContent downloads GoogleTest and Google Benchmark in here. Everything
+# under build/ is disposable and must never be committed.
+build/
+build-*/
+out/
+cmake-build-*/
+_deps/
+install/
+
+# --- CMake ------------------------------------------------------------------
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+cmake_install.cmake
+CTestTestfile.cmake
+CPackConfig.cmake
+CPackSourceConfig.cmake
+Testing/
+compile_commands.json
+CMakeUserPresets.json
+*.cmake.stamp
+
+# --- Compiled objects, libraries, executables -------------------------------
+*.o
+*.obj
+*.lo
+*.slo
+*.gch
+*.pch
+*.d
+*.a
+*.lib
+*.so
+*.so.*
+*.dylib
+*.dll
+*.exe
+*.out
+*.app
+*.exp
+*.ilk
+*.pdb
+*.idb
+
+# --- Make / Ninja -----------------------------------------------------------
+Makefile
+*.ninja
+.ninja_deps
+.ninja_log
+
+# --- Coverage / profiling / sanitizers --------------------------------------
+*.gcda
+*.gcno
+*.gcov
+*.profraw
+*.profdata
+coverage/
+callgrind.out.*
+perf.data*
+
+# --- Editors and IDEs -------------------------------------------------------
+.vscode/
+.idea/
+.vs/
+*.user
+*.suo
+*.sln
+*.vcxproj*
+.cache/
+.clangd/
+*.swp
+*.swo
+*~
+tags
+
+# --- OS ---------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Local, non-portable toolchains -----------------------------------------
+tools/

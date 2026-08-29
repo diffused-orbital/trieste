@@ -1,0 +1,60 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": { "major": 3, "minor": 21, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
+    },
+    {
+      "name": "mingw",
+      "inherits": "base",
+      "displayName": "MinGW-w64 / g++ (Ninja)",
+      "description": "Windows without Visual Studio: MSYS2 or any MinGW-w64 g++ on PATH. Requires ninja.",
+      "generator": "Ninja",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "gcc",
+        "CMAKE_CXX_COMPILER": "g++"
+      }
+    },
+    {
+      "name": "msvc",
+      "inherits": "base",
+      "displayName": "Visual Studio 2022 (x64)",
+      "description": "Windows with Visual Studio installed. Multi-config: build with --config.",
+      "generator": "Visual Studio 17 2022",
+      "architecture": "x64"
+    },
+    {
+      "name": "unix",
+      "inherits": "base",
+      "displayName": "Linux / macOS (default generator)",
+      "description": "Uses whatever make or ninja the system provides."
+    }
+  ],
+  "buildPresets": [
+    { "name": "mingw", "configurePreset": "mingw" },
+    { "name": "msvc",  "configurePreset": "msvc", "configuration": "Release" },
+    { "name": "unix",  "configurePreset": "unix" }
+  ],
+  "testPresets": [
+    {
+      "name": "mingw",
+      "configurePreset": "mingw",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "msvc",
+      "configurePreset": "msvc",
+      "configuration": "Release",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "unix",
+      "configurePreset": "unix",
+      "output": { "outputOnFailure": true }
+    }
+  ]
+}

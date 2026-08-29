@@ -1,0 +1,25 @@
+# trieste sample corpus -- "term <whitespace> weight", weight defaults to 1.
+# The first four rows are the worked example from the spec.
+application 1000
+apple 500
+apply 300
+apricot 150
+appliance 220
+applicant 180
+appreciate 95
+approach 640
+approve 410
+april 275
+hello 900
+help 850
+helmet 120
+helicopter 210
+held 330
+banana 400
+band 380
+bandwidth 260
+bank 720
+san francisco 900
+san diego 450
+san jose 310
+santa clara 140
