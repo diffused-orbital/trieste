@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <fstream>
+#include <mutex>
 #include <shared_mutex>
 #include <stdexcept>
 #include <string>
