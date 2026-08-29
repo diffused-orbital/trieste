@@ -14,6 +14,7 @@ add_executable(trieste_tests
     trie_test.cpp
     engine_test.cpp
     fuzzy_test.cpp
+    ngram_test.cpp
     concurrency_test.cpp)
 
 # Threads is needed for std::thread / std::shared_mutex on Linux (pthreads).

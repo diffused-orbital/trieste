@@ -61,9 +61,12 @@ std::string AutocompleteEngine::normalize(std::string_view text) {
 }
 
 void AutocompleteEngine::insertQuery(const std::string& query, int weight) {
-    std::unique_lock lock(mutex_);  // exclusive — mutates the trie
-    trie_.insert(normalize(query), weight);
-    // TODO(M3): feed the normalised token stream into the n-gram model too.
+    // Exclusive: this mutates BOTH the trie and the n-gram model, which the
+    // same mutex guards.
+    std::unique_lock lock(mutex_);
+    const std::string normalised = normalize(query);
+    trie_.insert(normalised, weight);
+    ngrams_.train(normalised, weight);  // M3: the same normalised token stream
 }
 
 void AutocompleteEngine::loadCorpus(const std::string& filePath) {
@@ -108,9 +111,21 @@ void AutocompleteEngine::loadCorpus(const std::string& filePath) {
     }
 
     // Single write-lock acquisition for the whole batch.
-    std::unique_lock lock(mutex_);  // exclusive — mutates the trie
+    //
+    // This deliberately calls trie_.insert() and ngrams_.train() directly
+    // instead of insertQuery(). insertQuery() takes a unique_lock on the very
+    // mutex already held here, and std::shared_mutex is NOT recursive, so
+    // routing through it would self-deadlock. The two-line duplication is
+    // load-bearing, not an oversight.
+    //
+    // Both milestones must be fed here: M4 rewrote this loop to bypass
+    // insertQuery, which is where M3 hangs its training. Dropping the train()
+    // call silently leaves loadCorpus populating the trie but never the n-gram
+    // model -- a merge hazard git reports no conflict for.
+    std::unique_lock lock(mutex_);  // exclusive — mutates the trie and the n-gram model
     for (const auto& [term, weight] : entries) {
         trie_.insert(term, weight);
+        ngrams_.train(term, weight);  // `entries` already holds normalised terms
     }
 }
 
@@ -143,8 +158,48 @@ std::vector<ScoredTerm> AutocompleteEngine::getScoredSuggestions(const std::stri
         return results;  // k satisfied exactly -- the fuzzy walk never runs
     }
 
-    // Pipeline step 2: typo-tolerant fallback, entered ONLY because the exact
-    // pass came up short.
+    // De-duplication is complete rather than partial here: because the exact
+    // pass returned FEWER than k, it necessarily returned every term carrying
+    // the prefix, so `results` is the whole exact set and nothing can slip past.
+    const auto alreadyPresent = [&results](const std::string& term) {
+        return std::any_of(results.begin(), results.end(),
+                           [&term](const ScoredTerm& entry) { return entry.term == term; });
+    };
+
+    // Pipeline step 2: n-gram context, but only on a word boundary -- trailing
+    // whitespace on the RAW input, checked before normalize() trims it away.
+    //
+    // A trailing space means the user finished a word and wants to know what
+    // comes NEXT, so a context prediction answers the actual question better
+    // than a typo correction of the word they already typed correctly.
+    //
+    // ORDERING MATTERS, and this is why predictions are gathered here rather
+    // than after the fuzzy pass: on any rich corpus fuzzy will cheerfully fill
+    // every free slot with near-miss corrections -- "san " has four exact hits,
+    // and fuzzy offers "bank" one edit from "san" -- leaving nothing for the
+    // predictions and starving the feature entirely. Predictions take the slots
+    // immediately below the exact hits; corrections get whatever is left.
+    const bool wordBoundary =
+        !inputPrefix.empty() && isSpace(static_cast<unsigned char>(inputPrefix.back()));
+
+    if (wordBoundary) {
+        const auto predictions = ngrams_.predict(prefix, limit - results.size());
+        for (const ScoredTerm& prediction : predictions) {
+            if (results.size() >= limit) {
+                break;
+            }
+            if (!alreadyPresent(prediction.term)) {
+                results.push_back(prediction);
+            }
+        }
+        if (results.size() >= limit) {
+            publish();
+            return results;
+        }
+    }
+
+    // Pipeline step 3: typo-tolerant fallback, filling whatever slots the exact
+    // and prediction passes left empty.
     const int budget = std::min(maxEditDistance, kMaxEditDistance);
     if (budget <= 0) {
         publish();
@@ -154,14 +209,6 @@ std::vector<ScoredTerm> AutocompleteEngine::getScoredSuggestions(const std::stri
     local.fuzzyRan = true;
     std::vector<FuzzyMatch> corrections = trie_.fuzzySearch(prefix, budget, &local.fuzzy);
 
-    // De-duplication is complete rather than partial here: because the exact
-    // pass returned FEWER than k, it necessarily returned every term carrying
-    // the prefix, so `results` is the whole exact set and nothing can slip past.
-    const auto alreadyPresent = [&results](const std::string& term) {
-        return std::any_of(results.begin(), results.end(),
-                           [&term](const ScoredTerm& entry) { return entry.term == term; });
-    };
-
     // Closest corrections first, popularity only as the tie-break. Pruning keeps
     // this candidate set small.
     // TODO(M6): a bounded heap would beat a full sort when k is much smaller
@@ -169,8 +216,8 @@ std::vector<ScoredTerm> AutocompleteEngine::getScoredSuggestions(const std::stri
     std::sort(corrections.begin(), corrections.end(),
               [](const FuzzyMatch& lhs, const FuzzyMatch& rhs) { return ranksBefore(lhs, rhs); });
 
-    // Corrections fill only the slots the exact pass left empty, so an exact hit
-    // is never displaced by a typo-match however popular that typo-match is.
+    // Corrections never displace an exact hit or a context prediction, however
+    // popular the typo-match happens to be.
     for (const FuzzyMatch& match : corrections) {
         if (results.size() >= limit) {
             break;
@@ -180,9 +227,6 @@ std::vector<ScoredTerm> AutocompleteEngine::getScoredSuggestions(const std::stri
         }
         results.push_back(ScoredTerm{match.term, match.frequency});
     }
-
-    // TODO(M3): if inputPrefix ends on a word boundary, ask the n-gram model for
-    // next-token predictions and blend them into the ranking.
 
     publish();
     return results;

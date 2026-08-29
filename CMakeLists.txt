@@ -23,7 +23,8 @@ option(TRIESTE_BUILD_CLI        "Build the demo CLI"       ON)
 
 add_library(trieste
     src/trie.cpp
-    src/autocomplete_engine.cpp)
+    src/autocomplete_engine.cpp
+    src/ngram_model.cpp)
 add_library(trieste::trieste ALIAS trieste)
 
 target_include_directories(trieste PUBLIC
