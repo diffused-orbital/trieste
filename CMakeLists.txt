@@ -19,6 +19,52 @@ option(TRIESTE_BUILD_TESTS      "Build the unit tests"     ON)
 option(TRIESTE_BUILD_BENCHMARKS "Build the benchmarks"     ON)
 option(TRIESTE_BUILD_CLI        "Build the demo CLI"       ON)
 
+# ---- ThreadSanitizer ---------------------------------------------------------
+#
+# The deterministic race detector that a stress test can never be. Stress tests
+# hope an unlucky interleaving shows up; TSan reasons about happens-before edges
+# and reports an unsynchronised pair of accesses even when the timing happened
+# to work out. That is the difference between "we did not observe a race" and
+# "there is no race on the paths we exercised".
+#
+# GCC or Clang only. MSVC has no ThreadSanitizer, and MinGW's runtime does not
+# support it either, so this configuration is Linux-only and runs in CI rather
+# than on a Windows development machine.
+option(TRIESTE_SANITIZE_THREAD "Build with ThreadSanitizer (GCC/Clang, Linux)" OFF)
+
+if(TRIESTE_SANITIZE_THREAD)
+    # WIN32 is checked separately and first: MinGW's g++ reports its compiler id
+    # as "GNU" exactly like Linux GCC, so a compiler-id test alone would happily
+    # accept a toolchain whose runtime has no ThreadSanitizer at all, and the
+    # build would fail much later with a confusing link error.
+    if(WIN32)
+        message(FATAL_ERROR
+            "TRIESTE_SANITIZE_THREAD is not supported on Windows.\n"
+            "ThreadSanitizer does not exist for MSVC, and MinGW/MSYS2 g++ "
+            "reports itself as GNU but ships no TSan runtime. Run the 'tsan' "
+            "preset on Linux -- that is what the CI job does.")
+    endif()
+
+    if(NOT (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang"))
+        message(FATAL_ERROR
+            "TRIESTE_SANITIZE_THREAD requires GCC or Clang, but found "
+            "'${CMAKE_CXX_COMPILER_ID}'.")
+    endif()
+
+    # Set globally, BEFORE any target is declared, so the FetchContent'd
+    # GoogleTest is instrumented too. Uninstrumented code is a blind spot: TSan
+    # cannot see accesses it did not instrument, so mixing the two makes it
+    # under-report silently rather than fail loudly.
+    #
+    # -O1 with frame pointers keeps stacks readable. At -O2 the inlining makes a
+    # report far harder to trace back to the offending line, and the whole point
+    # here is to be handed an exact location.
+    add_compile_options(-fsanitize=thread -fno-omit-frame-pointer -g -O1)
+    add_link_options(-fsanitize=thread)
+
+    message(STATUS "ThreadSanitizer: ENABLED (race detection build)")
+endif()
+
 # ---- Library ----------------------------------------------------------------
 
 add_library(trieste

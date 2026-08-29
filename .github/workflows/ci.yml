@@ -28,3 +28,46 @@ jobs:
 
       - name: Test
         run: ctest --test-dir build --build-config Release --output-on-failure
+
+  # ---------------------------------------------------------------------------
+  # ThreadSanitizer: the deterministic answer to "is the M4 locking actually
+  # race-free?".
+  #
+  # The stress tests can only report races that a lucky interleaving exposed.
+  # TSan tracks happens-before edges, so it flags an unsynchronised pair of
+  # accesses even when the timing happened to work out on this particular run.
+  # A clean run is therefore evidence of absence, not merely absence of evidence.
+  #
+  # Ubuntu only. There is no ThreadSanitizer for MSVC, and MinGW g++ reports
+  # itself as GNU while shipping no TSan runtime -- which is exactly why the
+  # intermittent crash seen on a Windows dev machine could never be settled
+  # locally.
+  # ---------------------------------------------------------------------------
+  thread-sanitizer:
+    name: ThreadSanitizer (Ubuntu)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      # GitHub's Ubuntu images run kernels whose default ASLR entropy exceeds
+      # what the sanitizer runtimes can map, which aborts at startup with
+      # "unexpected memory mapping". Lowering the randomisation bits is the
+      # standard workaround and affects only this runner.
+      - name: Widen sanitizer address space
+        run: sudo sysctl -w vm.mmap_rnd_bits=28
+
+      - name: Configure (TSan)
+        run: cmake --preset tsan
+
+      - name: Build (TSan)
+        run: cmake --build --preset tsan --parallel
+
+      # halt_on_error=1 turns the first race report into a nonzero exit, so a
+      # race fails the job instead of scrolling past in the log. history_size
+      # buys deeper stacks for the previous access, which is usually the half of
+      # a report that actually identifies the bug.
+      - name: Run concurrency tests under TSan
+        env:
+          TSAN_OPTIONS: "halt_on_error=1:history_size=7:second_deadlock_stack=1"
+        run: ctest --preset tsan
