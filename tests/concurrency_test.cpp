@@ -292,4 +292,102 @@ TEST(Concurrency, MetricsUnderConcurrentWrites) {
     EXPECT_GE(engine.termCount(), static_cast<std::size_t>(kTerms));
 }
 
+// ---------------------------------------------------------------------------
+// Test 6: the n-gram model read/write pair, under contention.
+//
+// Every other test in this file drives the trie. The n-gram model added in M3
+// lives behind the SAME mutex, and its write side (train, via insertQuery) is
+// covered by the tests above -- but nothing here ever issued a word-boundary
+// query, so ngrams_.predict() had never been observed running concurrently with
+// ngrams_.train(). Race-freedom for that pair held only by construction, from
+// the fact that both sit behind the same lock.
+//
+// This closes that gap directly. The trailing space in "san " is load-bearing:
+// it is what makes getScoredSuggestions take the n-gram branch at all, so
+// readers here genuinely land in predict() while writers are inside train().
+// ---------------------------------------------------------------------------
+TEST(Concurrency, NgramPredictRunsConcurrentlyWithTrain) {
+    AutocompleteEngine engine;
+    // Seeded so the bigram "san" -> "francisco" exists before any thread starts;
+    // readers can then assert on a prediction that must always be available.
+    engine.insertQuery("san francisco", 900);
+    engine.insertQuery("san diego", 450);
+
+    constexpr int kReaders = 6;
+    constexpr int kWriters = 4;
+    constexpr int kIters   = 1500;
+    constexpr int kThreads = kReaders + kWriters;
+
+    std::atomic<int> readErrors{0};
+    std::atomic<int> predictionsSeen{0};
+    std::atomic<int> ready{0};
+
+    const auto waitForAll = [&ready] {
+        ready.fetch_add(1, std::memory_order_acq_rel);
+        while (ready.load(std::memory_order_acquire) < kThreads) {
+            std::this_thread::yield();
+        }
+    };
+
+    const auto contains = [](const std::vector<std::string>& haystack, const char* needle) {
+        for (const auto& entry : haystack) {
+            if (entry == needle) {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    std::vector<std::thread> readers;
+    readers.reserve(kReaders);
+    for (int i = 0; i < kReaders; ++i) {
+        readers.emplace_back([&] {
+            waitForAll();
+            for (int j = 0; j < kIters; ++j) {
+                // k is 8 so the exact hits (at most three "san *" terms) cannot
+                // fill the result on their own -- there are always free slots
+                // for the n-gram pass, which is the code path under test.
+                const auto results = engine.getSuggestions("san ", 8);
+                if (results.empty()) {
+                    ++readErrors;  // the seeded terms guarantee a non-empty result
+                }
+                // "francisco" is a BARE predicted token, reachable only through
+                // ngrams_.predict(). Seeing it proves the read side really ran.
+                if (contains(results, "francisco")) {
+                    ++predictionsSeen;
+                }
+            }
+        });
+    }
+
+    std::vector<std::thread> writers;
+    writers.reserve(kWriters);
+    for (int i = 0; i < kWriters; ++i) {
+        writers.emplace_back([&] {
+            waitForAll();
+            for (int j = 0; j < kIters; ++j) {
+                // Both calls reach ngrams_.train(): the first reinforces an
+                // existing transition, the second keeps adding a new one.
+                engine.insertQuery("san francisco", 1);
+                engine.insertQuery("san jose", 1);
+            }
+        });
+    }
+
+    for (auto& t : writers) { t.join(); }
+    for (auto& t : readers) { t.join(); }
+
+    EXPECT_EQ(readErrors.load(), 0);
+    // Every single read should have seen the prediction, since the seeding
+    // happened before the barrier released anyone.
+    EXPECT_EQ(predictionsSeen.load(), kReaders * kIters);
+
+    // Writes must all be accounted for -- the same lost-update check the trie
+    // tests apply, now with the n-gram model being mutated on every call too.
+    const auto scored = engine.getScoredSuggestions("san francisco", 1);
+    ASSERT_EQ(scored.size(), 1u);
+    EXPECT_EQ(scored[0].frequency, 900 + kWriters * kIters);
+    EXPECT_EQ(engine.termCount(), 3u);  // san francisco, san diego, san jose
+}
+
 }  // namespace

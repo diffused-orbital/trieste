@@ -32,12 +32,26 @@
       "inherits": "base",
       "displayName": "Linux / macOS (default generator)",
       "description": "Uses whatever make or ninja the system provides."
+    },
+    {
+      "name": "tsan",
+      "inherits": "base",
+      "displayName": "ThreadSanitizer (Linux, GCC/Clang)",
+      "description": "Race-detection build. Linux only: TSan does not exist on MSVC and is unsupported on MinGW. Its own build tree, so it never collides with the ordinary one.",
+      "binaryDir": "${sourceDir}/build-tsan",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "TRIESTE_SANITIZE_THREAD": "ON",
+        "TRIESTE_BUILD_BENCHMARKS": "OFF",
+        "TRIESTE_BUILD_CLI": "OFF"
+      }
     }
   ],
   "buildPresets": [
     { "name": "mingw", "configurePreset": "mingw" },
     { "name": "msvc",  "configurePreset": "msvc", "configuration": "Release" },
-    { "name": "unix",  "configurePreset": "unix" }
+    { "name": "unix",  "configurePreset": "unix" },
+    { "name": "tsan",  "configurePreset": "tsan" }
   ],
   "testPresets": [
     {
@@ -55,6 +69,12 @@
       "name": "unix",
       "configurePreset": "unix",
       "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "tsan",
+      "configurePreset": "tsan",
+      "output": { "outputOnFailure": true },
+      "filter": { "include": { "name": "Concurrency" } }
     }
   ]
 }
