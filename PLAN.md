@@ -99,11 +99,40 @@ wide. Graduated fuzziness (E=0 for ≤2 chars, E=1 for 3–4, E=2 for ≥5, whic
 what Elasticsearch's `AUTO` does) would bound it properly. Deferred rather than
 guessed: it changes result semantics, so it should be driven by M5 numbers.
 
-## M3 — N-gram context
+## M3 — N-gram context  ✅ done
 
-- Bigram/trigram Markov model over the corpus for next-token prediction.
+- Bigram/trigram Markov model (`NgramModel`) over the corpus for next-token
+  prediction.
 - Multi-word input: `"san "` → `"francisco"`, ranked by transition probability.
-- Blended into `getSuggestions` when the input ends on a word boundary.
+- Blended into `getSuggestions` when the input ends on a word boundary (trailing
+  space).
+
+**Decisions taken**
+
+- *Markov order: bigram + trigram.* Unigrams give no context. Bigrams are the
+  minimum useful unit; trigrams improve precision for short repeated phrases
+  ("new york city"). Higher orders would need much larger corpora to have
+  meaningful counts and are deferred to M6 if benchmarks show they help.
+- *Training is transitive through `insertQuery`.* `loadCorpus` calls
+  `insertQuery`, and `insertQuery` now trains the n-gram model with the same
+  normalised token stream it feeds to the trie. No separate training pass and no
+  API surface change.
+- *Trigram context takes priority.* Trigram candidates fill first; bigram
+  candidates fill only the remaining slots (de-duplicated). This matches
+  standard back-off intuition: more context → more specific → higher ranked.
+- *Word-boundary trigger: trailing space only.* A bare trailing space is
+  unambiguous — the user has completed a word and expects what comes next.
+  Mid-word input continues to get trie completion (more useful per keystroke).
+  More sophisticated triggers (e.g. detecting two-word inputs without the
+  trailing space) are deferred to M6.
+- *Blending order: exact trie hits, then fuzzy corrections, then n-gram
+  predictions.* An n-gram prediction never displaces a term the trie already
+  found; de-duplication removes repeats before any candidate enters the result
+  list.
+- *No probability smoothing.* Raw transition counts are enough for the small
+  corpora trieste targets. Laplace or Kneser-Ney smoothing would obscure the
+  frequency signal rather than improve it at this scale; deferred if benchmarks
+  flag it.
 
 ## M4 — Concurrency
 

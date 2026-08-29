@@ -8,10 +8,10 @@ bounded typo correction (edit distance ≤ 2) when exact matching comes up short
 The roadmap adds an n-gram context model for multi-word input and a concurrent
 read path — each stage measured by a Google Benchmark suite rather than assumed.
 
-> **Status: Milestone 2.** The trie, corpus loading, exact prefix search, Top-K
-> ranking and bounded typo correction are implemented and tested. N-grams and
-> concurrency are stubbed behind the public API and marked `TODO(Mx)`. See
-> [PLAN.md](PLAN.md) for the full roadmap.
+> **Status: Milestone 3.** The trie, corpus loading, exact prefix search, Top-K
+> ranking, bounded typo correction, and bigram/trigram next-token prediction are
+> implemented and tested. Concurrency is stubbed behind the public API and marked
+> `TODO(M4)`. See [PLAN.md](PLAN.md) for the full roadmap.
 
 ## Quick start
 
@@ -87,6 +87,19 @@ Terms are normalised on the way in and prefixes on the way out — trimmed,
 lowercased, internal whitespace collapsed — so matching is case-insensitive and
 symmetric.
 
+When the input ends on a **word boundary** (trailing space), the engine also
+consults the bigram/trigram Markov model trained from the same corpus and blends
+next-token predictions into the results:
+
+```cpp
+// After loading a corpus with "san francisco 900" and "san diego 450":
+engine.getSuggestions("san ");
+// -> {"san francisco", "san diego"}  (trie prefix hits first)
+
+engine.getSuggestions("san francisco ");
+// -> {"san francisco", ...}  next token predictions after "san francisco"
+```
+
 ### Corpus format
 
 One entry per line. A trailing all-digit token is the weight; without one the
@@ -134,10 +147,19 @@ the engine corrects the typo and then completes from the corrected point —
 Corrections fill only the slots exact matching left empty, ranked by distance
 first and frequency second, so an exact hit is never displaced.
 
+**Bigram/trigram Markov model for next-token prediction.** Every term fed to
+the engine (via `loadCorpus` or `insertQuery`) also trains a lightweight n-gram
+model: unigram, bigram, and trigram counts are updated for every adjacent token
+pair in the normalised text. When the user's input ends on a word boundary
+(trailing space), `getSuggestions` asks the model for the most likely next
+token, tries the trigram context first (last two tokens), then falls back to
+the bigram context (last one token). Predictions fill slots the trie left empty
+and are de-duplicated against trie hits so nothing appears twice.
+
 ## Layout
 
 ```
-include/trieste/   public headers — trie.hpp, autocomplete_engine.hpp
+include/trieste/   public headers — trie.hpp, autocomplete_engine.hpp, ngram_model.hpp
 src/               implementation
 apps/              demo CLI
 tests/             GoogleTest suites
@@ -151,7 +173,7 @@ data/              sample corpus
 |---|---|---|
 | M1 | Scaffold, Trie, exact prefix, Top-K min-heap | ✅ done |
 | M2 | Fuzzy search — bounded edit distance (E ≤ 2) over the trie | ✅ done |
-| M3 | Bigram/trigram Markov model for next-token prediction | planned |
+| M3 | Bigram/trigram Markov model for next-token prediction | ✅ done |
 | M4 | Concurrency — `std::shared_mutex` read/write path | planned |
 | M5 | Benchmark suite — p50/p95/p99, multi-threaded QPS, naive vs. pruned | planned |
 | M6 | Memory and latency optimisation, driven by M5's numbers | planned |

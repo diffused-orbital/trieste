@@ -5,6 +5,7 @@
 #include <string_view>
 #include <vector>
 
+#include "trieste/ngram_model.hpp"
 #include "trieste/trie.hpp"
 
 namespace trieste {
@@ -90,8 +91,8 @@ public:
 
 private:
     Trie trie_;
+    NgramModel ngrams_;  // M3: bigram/trigram Markov model for next-token prediction.
 
-    // TODO(M3): NgramModel ngrams_;  bigram/trigram transition counts.
     // TODO(M4): mutable std::shared_mutex mutex_;  shared on read, exclusive on
     //           write, guarding trie_ and ngrams_ together.
 };

@@ -13,7 +13,8 @@ FetchContent_MakeAvailable(googletest)
 add_executable(trieste_tests
     trie_test.cpp
     engine_test.cpp
-    fuzzy_test.cpp)
+    fuzzy_test.cpp
+    ngram_test.cpp)
 
 target_link_libraries(trieste_tests PRIVATE trieste::trieste GTest::gtest_main)
 

@@ -60,8 +60,9 @@ std::string AutocompleteEngine::normalize(std::string_view text) {
 
 void AutocompleteEngine::insertQuery(const std::string& query, int weight) {
     // TODO(M4): std::unique_lock over mutex_ -- exclusive, this mutates.
-    trie_.insert(normalize(query), weight);
-    // TODO(M3): feed the normalised token stream into the n-gram model too.
+    const std::string normalised = normalize(query);
+    trie_.insert(normalised, weight);
+    ngrams_.train(normalised, weight);  // M3: feed normalised token stream into the n-gram model.
 }
 
 void AutocompleteEngine::loadCorpus(const std::string& filePath) {
@@ -169,8 +170,25 @@ std::vector<ScoredTerm> AutocompleteEngine::getScoredSuggestions(const std::stri
         results.push_back(ScoredTerm{match.term, match.frequency});
     }
 
-    // TODO(M3): if inputPrefix ends on a word boundary, ask the n-gram model for
-    // next-token predictions and blend them into the ranking.
+    // M3: When the input ends on a word boundary (trailing space), ask the
+    // n-gram model for next-token predictions and blend them into the results.
+    // A trailing space means the user has finished typing a word and is
+    // expecting completions of what comes next, not completions of the last
+    // word itself.  The trie pass above will have returned any multi-word
+    // entries that start with the full prefix; the n-gram pass adds context-
+    // driven predictions for the next token that the trie alone cannot produce.
+    const bool wordBoundary = !prefix.empty() && prefix.back() == ' ';
+    if (wordBoundary && results.size() < limit) {
+        const auto predictions = ngrams_.predict(prefix, limit - results.size());
+        for (const ScoredTerm& p : predictions) {
+            if (results.size() >= limit) {
+                break;
+            }
+            if (!alreadyPresent(p.term)) {
+                results.push_back(p);
+            }
+        }
+    }
 
     publish();
     return results;
