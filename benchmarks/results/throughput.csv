@@ -1,0 +1,14 @@
+workload,threads,qps,us_per_query_per_thread
+PrefixReads,1,7227,138.4
+PrefixReads,2,23218,86.1
+PrefixReads,4,47834,83.6
+PrefixReads,8,99420,80.5
+PrefixReads,16,198674,80.5
+MixedQueries,1,7957,125.7
+MixedQueries,2,23280,85.9
+MixedQueries,4,52609,76.0
+MixedQueries,8,95724,83.6
+MixedQueries,16,168675,94.9
+ReadsUnderWriter,1,2196,455.5
+ReadsUnderWriter,4,9953,401.9
+ReadsUnderWriter,16,47056,340.0

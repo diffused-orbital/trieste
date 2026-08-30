@@ -1,147 +1,149 @@
-// Benchmark harness for trieste.
+// M5: query latency on a realistic corpus.
 //
-// M1 wires the harness up and establishes a baseline for the two operations
-// that exist: exact prefix Top-K, and dynamic insertion. The full suite from
-// the spec -- latency percentiles, multi-threaded QPS, and naive O(M*N)
-// Levenshtein versus trie-pruned fuzzy search -- lands in M5, marked TODO below.
+// Every benchmark here reports p50/p95/p99 as counters rather than leaning on
+// the mean. For an interactive engine the mean is close to meaningless: the
+// user notices the slow keystroke, not the average one.
 //
-// Run:  ./trieste_bench
-//       ./trieste_bench --benchmark_filter=PrefixTopK
+// Corpus: 100,000 real English words with Zipfian weights plus 8,000 phrases.
+// See tools/corpus_gen.cpp for how it is built and RESULTS.md for why random
+// strings would have made these numbers a fiction.
+//
+// Run:  ./trieste_bench --benchmark_filter=Prefix
+//       ./trieste_bench --benchmark_out=results.csv --benchmark_out_format=csv
 
-#include <benchmark/benchmark.h>
-
-#include <cstdint>
 #include <string>
 #include <vector>
 
-#include "trieste/autocomplete_engine.hpp"
+#include <benchmark/benchmark.h>
+
+#include "bench_corpus.hpp"
 
 namespace {
 
-/// Deterministic pseudo-random words. A fixed LCG rather than std::mt19937 with
-/// a random seed, because a benchmark that measures a different corpus on every
-/// run cannot be compared against yesterday's numbers.
-class WordGenerator {
-public:
-    explicit WordGenerator(std::uint64_t seed) : state_(seed) {}
+// ---------------------------------------------------------------------------
+// 1. Exact prefix Top-K
+// ---------------------------------------------------------------------------
 
-    std::string next() {
-        const std::size_t length = 3 + (nextValue() % 10);  // 3..12 characters
-        std::string word;
-        word.reserve(length);
-        for (std::size_t i = 0; i < length; ++i) {
-            word.push_back(static_cast<char>('a' + (nextValue() % 26)));
-        }
-        return word;
-    }
-
-    int nextWeight() { return static_cast<int>(1 + (nextValue() % 10000)); }
-
-private:
-    std::uint64_t nextValue() {
-        state_ = state_ * 6364136223846793005ULL + 1442695040888963407ULL;
-        return state_ >> 33;
-    }
-    std::uint64_t state_;
-};
-
-/// One shared dictionary for every read benchmark, built lazily on first use so
-/// the corpus construction cost is not attributed to any single benchmark.
-const trieste::AutocompleteEngine& dictionary() {
-    static const trieste::AutocompleteEngine* engine = [] {
-        auto* built = new trieste::AutocompleteEngine();
-        WordGenerator generator(0xC0FFEEULL);
-        for (int i = 0; i < 100'000; ++i) {  // the spec's 100k-word target
-            built->insertQuery(generator.next(), generator.nextWeight());
-        }
-        return built;
-    }();
-    return *engine;
-}
-
-/// A spread of prefixes so the benchmark measures an average over the trie
-/// rather than one lucky branch.
-const std::vector<std::string>& probePrefixes() {
-    static const std::vector<std::string>* prefixes = [] {
-        auto* built = new std::vector<std::string>();
-        WordGenerator generator(0xBEEFULL);
-        for (int i = 0; i < 512; ++i) {
-            built->push_back(generator.next().substr(0, 3));
-        }
-        return built;
-    }();
-    return *prefixes;
-}
-
-void BM_PrefixTopK(benchmark::State& state) {
-    const auto& engine = dictionary();
-    const auto& prefixes = probePrefixes();
+/// Latency against k, at a fixed prefix length. The edit budget is pinned to
+/// zero so this measures the exact path alone -- otherwise a prefix with fewer
+/// than k matches silently diverts into the fuzzy fallback and the benchmark
+/// would be reporting M2's cost under M1's name.
+void BM_PrefixTopK_ByK(benchmark::State& state) {
+    bench::warmUp();
+    const auto& e = bench::engine();
+    const auto& queries = bench::prefixes(3);
     const int k = static_cast<int>(state.range(0));
 
-    std::size_t index = 0;
+    bench::LatencyRecorder rec;
+    rec.reserve(static_cast<std::size_t>(state.max_iterations));
+
+    std::size_t i = 0;
     for (auto _ : state) {
-        // Edit budget pinned to zero on purpose. These are three-character
-        // probes, so a prefix carries only a handful of the 100k terms and any
-        // k above about 5 would fall short and silently divert into the fuzzy
-        // fallback -- leaving this benchmark measuring M2's path under M1's
-        // name. BM_FuzzyFallback below measures correction deliberately.
-        auto results = engine.getSuggestions(prefixes[index++ % prefixes.size()], k,
-                                             /*maxEditDistance=*/0);
-        benchmark::DoNotOptimize(results);
+        const std::string& q = queries[i++ % queries.size()];
+        rec.time([&] { benchmark::DoNotOptimize(e.getSuggestions(q, k, 0)); });
     }
+    rec.publish(state);
     state.SetItemsProcessed(state.iterations());
 }
-BENCHMARK(BM_PrefixTopK)->Arg(1)->Arg(5)->Arg(20);
+BENCHMARK(BM_PrefixTopK_ByK)->Arg(1)->Arg(5)->Arg(10)->Arg(20)->Iterations(20000);
 
-/// Six-character probes. At that length an exact prefix hit against a random
-/// dictionary is unlikely, so almost every call falls through to the fuzzy
-/// path -- which is the point: this measures the fallback, not the fast path.
-const std::vector<std::string>& missPrefixes() {
-    static const std::vector<std::string>* prefixes = [] {
-        auto* built = new std::vector<std::string>();
-        WordGenerator generator(0xFACEULL);
-        for (int i = 0; i < 512; ++i) {
-            built->push_back(generator.next().substr(0, 6));
-        }
-        return built;
-    }();
-    return *prefixes;
+/// Latency against prefix length at fixed k. Short prefixes are the expensive
+/// case: the subtree beneath them holds a large share of the dictionary, and
+/// M1's Top-K walk has to visit all of it.
+void BM_PrefixTopK_ByLength(benchmark::State& state) {
+    bench::warmUp();
+    const auto& e = bench::engine();
+    const auto len = static_cast<std::size_t>(state.range(0));
+    const auto& queries = bench::prefixes(len);
+
+    bench::LatencyRecorder rec;
+    rec.reserve(static_cast<std::size_t>(state.max_iterations));
+
+    std::size_t i = 0;
+    for (auto _ : state) {
+        const std::string& q = queries[i++ % queries.size()];
+        rec.time([&] { benchmark::DoNotOptimize(e.getSuggestions(q, 5, 0)); });
+    }
+    rec.publish(state);
+    state.SetItemsProcessed(state.iterations());
 }
+BENCHMARK(BM_PrefixTopK_ByLength)->Arg(2)->Arg(3)->Arg(4)->Arg(6)->Arg(8)->Iterations(20000);
 
+// ---------------------------------------------------------------------------
+// 2. Fuzzy fallback
+// ---------------------------------------------------------------------------
+
+/// Typo correction at E=1 and E=2. Queries are real words with that many
+/// characters substituted, so each one has a genuine correction to find rather
+/// than being a miss that returns early.
 void BM_FuzzyFallback(benchmark::State& state) {
-    const auto& engine = dictionary();
-    const auto& prefixes = missPrefixes();
+    bench::warmUp();
+    const auto& e = bench::engine();
     const int budget = static_cast<int>(state.range(0));
+    const auto& queries = bench::typoQueries(budget);
 
-    std::size_t index = 0;
+    bench::LatencyRecorder rec;
+    rec.reserve(static_cast<std::size_t>(state.max_iterations));
+
+    std::size_t i = 0;
     for (auto _ : state) {
-        auto results = engine.getSuggestions(prefixes[index++ % prefixes.size()], 5, budget);
-        benchmark::DoNotOptimize(results);
+        const std::string& q = queries[i++ % queries.size()];
+        // k=20 keeps the exact pass from ever satisfying k on its own, so the
+        // fuzzy path is genuinely entered on every iteration.
+        rec.time([&] { benchmark::DoNotOptimize(e.getSuggestions(q, 20, budget)); });
     }
+    rec.publish(state);
     state.SetItemsProcessed(state.iterations());
 }
-BENCHMARK(BM_FuzzyFallback)->Arg(1)->Arg(2);
+BENCHMARK(BM_FuzzyFallback)->Arg(1)->Iterations(4000);
+BENCHMARK(BM_FuzzyFallback)->Arg(2)->Iterations(1000);
 
+// ---------------------------------------------------------------------------
+// 3. N-gram next-token prediction
+// ---------------------------------------------------------------------------
+
+/// Word-boundary queries. The trailing space is what routes the query into the
+/// n-gram branch; without it this would just be another prefix benchmark.
+void BM_NgramPrediction(benchmark::State& state) {
+    bench::warmUp();
+    const auto& e = bench::engine();
+    const auto& queries = bench::boundaryQueries();
+
+    bench::LatencyRecorder rec;
+    rec.reserve(static_cast<std::size_t>(state.max_iterations));
+
+    std::size_t i = 0;
+    for (auto _ : state) {
+        const std::string& q = queries[i++ % queries.size()];
+        rec.time([&] { benchmark::DoNotOptimize(e.getSuggestions(q, 5, 0)); });
+    }
+    rec.publish(state);
+    state.SetItemsProcessed(state.iterations());
+}
+BENCHMARK(BM_NgramPrediction)->Iterations(20000);
+
+// ---------------------------------------------------------------------------
+// 4. Write path
+// ---------------------------------------------------------------------------
+
+/// insertQuery, for reference: it takes the exclusive lock and updates both the
+/// trie and the n-gram model, so it bounds how fast the engine can learn.
 void BM_InsertQuery(benchmark::State& state) {
-    trieste::AutocompleteEngine engine;
-    WordGenerator generator(0x1234ULL);
+    bench::warmUp();
+    trieste::AutocompleteEngine local;
+    const auto& words = bench::singleWords();
+
+    bench::LatencyRecorder rec;
+    rec.reserve(static_cast<std::size_t>(state.max_iterations));
+
+    std::size_t i = 0;
     for (auto _ : state) {
-        state.PauseTiming();
-        const std::string word = generator.next();
-        state.ResumeTiming();
-        engine.insertQuery(word, 1);
+        const std::string& w = words[i++ % words.size()];
+        rec.time([&] { local.insertQuery(w, 1); });
     }
+    rec.publish(state);
     state.SetItemsProcessed(state.iterations());
 }
-BENCHMARK(BM_InsertQuery);
-
-// TODO(M5): latency percentiles -- ->ComputeStatistics("p95", ...) and "p99",
-//           asserting the spec's p95 < 2ms / p99 < 5ms budget.
-// TODO(M5): multi-threaded QPS -- ->ThreadRange(1, 16) over BM_PrefixTopK once
-//           M4's shared_mutex makes concurrent reads safe.
-// TODO(M5): naive full-dictionary O(M*N) Levenshtein versus the M2 trie-pruned
-//           walk, as a head-to-head on the same corpus.
+BENCHMARK(BM_InsertQuery)->Iterations(50000);
 
 }  // namespace
-
-BENCHMARK_MAIN();

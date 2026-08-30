@@ -18,6 +18,7 @@ endif()
 option(TRIESTE_BUILD_TESTS      "Build the unit tests"     ON)
 option(TRIESTE_BUILD_BENCHMARKS "Build the benchmarks"     ON)
 option(TRIESTE_BUILD_CLI        "Build the demo CLI"       ON)
+option(TRIESTE_BUILD_TOOLS      "Build the corpus generator" ON)
 
 # ---- ThreadSanitizer ---------------------------------------------------------
 #
@@ -106,4 +107,13 @@ endif()
 
 if(TRIESTE_BUILD_BENCHMARKS)
     add_subdirectory(benchmarks)
+endif()
+
+# ---- Tools -------------------------------------------------------------------
+#
+# corpus_gen regenerates data/benchmark_corpus.txt from the upstream word lists.
+# The corpus itself is committed, so this is only needed to audit or rebuild it.
+if(TRIESTE_BUILD_TOOLS)
+    add_executable(trieste_corpus_gen tools/corpus_gen.cpp)
+    target_compile_features(trieste_corpus_gen PRIVATE cxx_std_20)
 endif()

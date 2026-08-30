@@ -181,20 +181,61 @@ cmake --build --preset unix
 ctest --preset unix
 ```
 
-## M5 — Benchmark suite
+## M5 — Benchmark suite  ✅ done
 
-- Latency profile: p50 / p95 / p99, against the spec's budget of p95 < 2 ms and
-  p99 < 5 ms on a 100k+ word dictionary.
-- Multi-threaded QPS under concurrent read load (and read/write mix).
-- Naive full-dictionary O(M×N) Levenshtein DP vs. the trie-pruned walk from M2,
-  head-to-head on the same corpus.
+Full write-up and charts in [RESULTS.md](RESULTS.md).
+
+**Decisions taken**
+
+- *Realistic corpus, not random strings.* 108,008 terms: 100,000 real English
+  words with the frequency head taken from real observed data, Zipfian weights,
+  plus 8,000 phrases for the n-gram path. Random strings share no prefixes, so
+  the trie degenerates and subtree pruning — the basis of the sub-O(N) claim —
+  can never fire. Benchmarking on them measures a pathological case. The corpus
+  is committed for reproducibility and regenerable via `tools/corpus_gen.cpp`.
+- *Percentiles measured per query, not per repetition.* Google Benchmark's
+  built-in repetition statistics give percentiles of per-repetition means, which
+  averages away exactly the slow calls a p99 exists to expose.
+- *Fair naive baseline.* The naive side computes the same prefix-relaxed
+  predicate (min of the final DP row), not whole-word distance, and an
+  equivalence benchmark asserts both implementations return identical hit counts.
+  A speedup between two different questions would be meaningless.
+- *Benchmark families run in isolation.* Running the whole suite back-to-back
+  throttled the laptop and inflated later results ~2.3×.
+
+**Results**
+
+| Path | p50 | p99 |
+|---|---|---|
+| Exact prefix, 4-char, k=5 | 12.6 µs | 323 µs |
+| Exact prefix, 2-char, k=5 | 489.6 µs | 3.90 ms |
+| Fuzzy E=1 | 40.3 µs | 89.8 µs |
+| Fuzzy E=2 | 477.2 µs | 1.32 ms |
+| N-gram prediction | 15.9 µs | 237.5 µs |
+
+- **Naive vs pruned: 245× at E=1, 24× at E=2**, 0 mismatches.
+- **199,000 QPS at 16 reader threads**; per-thread latency flat from 2→16
+  threads, so the shared_mutex read path parallelises essentially perfectly.
+- A single continuous writer costs ~4× read throughput.
+- Spec targets met everywhere except 2-character prefixes (p95 2.22 ms vs 2 ms).
 
 ## M6 — Memory and latency optimisation
 
-Driven by M5's numbers, not by guesswork.
+Now driven by M5's numbers rather than guesswork. What they actually point at:
 
-- Compressed / radix nodes to collapse single-child chains.
-- Cached Top-K (or a subtree max-frequency) per node so prefix search can prune
-  branches that cannot beat the current heap minimum, instead of walking the
-  whole subtree.
-- Arena or vector-backed node storage to cut pointer-chasing.
+- **Cache Top-K per subtree — the one measurement that misses its budget.**
+  Cost is dominated by prefix length, not k: k=1→20 changes p50 by 26%, while
+  8-char→2-char changes it by 816×. M1's Top-K walks the entire subtree before
+  ranking. A cached per-node best-K, or a subtree max frequency to prune against
+  the heap minimum, targets exactly this.
+- **Writer impact, not read scaling, is the real concurrency question.** Reads
+  scale linearly to 16 threads; one continuous writer costs 4×. That is the
+  evidence M4 said to wait for before considering fine-grained locking.
+- **A Levenshtein automaton is still not worth building.** The pruned DP walk is
+  already 245×/24× ahead of naive and inside budget; the automaton would
+  optimise a path that is not the bottleneck.
+- Compressed / radix nodes to collapse single-child chains, and arena-backed
+  node storage to cut pointer-chasing, remain open — but should be measured
+  against the Top-K caching win first.
+- **Graduated fuzziness** (open since M2) is still worth doing for behaviour,
+  not speed: E=2 latency is comfortably inside budget.
