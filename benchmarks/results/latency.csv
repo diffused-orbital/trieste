@@ -1,0 +1,14 @@
+family,benchmark,variant,mean_us,p50_us,p95_us,p99_us,max_us,samples
+prefix,BM_PrefixTopK_ByK,1,129.63,57.00,513.70,1039.20,2858.40,20000
+prefix,BM_PrefixTopK_ByK,5,123.10,58.40,473.20,906.10,2228.80,20000
+prefix,BM_PrefixTopK_ByK,10,126.13,61.80,471.30,907.60,2725.20,20000
+prefix,BM_PrefixTopK_ByK,20,143.82,72.10,533.60,1079.80,3358.70,20000
+prefix,BM_PrefixTopK_ByLength,2,747.06,489.60,2220.20,3903.10,8197.50,20000
+prefix,BM_PrefixTopK_ByLength,3,146.37,65.90,568.80,1213.50,2734.50,20000
+prefix,BM_PrefixTopK_ByLength,4,33.40,12.60,136.90,323.30,1913.70,20000
+prefix,BM_PrefixTopK_ByLength,6,2.22,1.10,6.80,17.00,162.20,20000
+prefix,BM_PrefixTopK_ByLength,8,0.86,0.60,1.90,3.10,34.20,20000
+fuzzy,BM_FuzzyFallback,1,42.06,40.30,68.60,89.80,321.80,4000
+fuzzy,BM_FuzzyFallback,2,499.99,477.20,837.70,1317.60,2294.30,1000
+ngram,BM_NgramPrediction,,27.04,15.90,76.30,237.50,874.90,20000
+insert,BM_InsertQuery,,1.15,0.80,1.90,4.10,1337.70,50000

@@ -8,10 +8,11 @@ bounded typo correction (edit distance ≤ 2) when exact matching comes up short
 The roadmap adds an n-gram context model for multi-word input and a concurrent
 read path — each stage measured by a Google Benchmark suite rather than assumed.
 
-> **Status: Milestone 4.** The trie, corpus loading, exact prefix search, Top-K
+> **Status: Milestone 5.** The trie, corpus loading, exact prefix search, Top-K
 > ranking, bounded typo correction, bigram/trigram next-token prediction, and the
-> `std::shared_mutex` read/write path are all implemented and tested. See
-> [PLAN.md](PLAN.md) for the full roadmap.
+> `std::shared_mutex` read/write path are all implemented and tested, and
+> benchmarked on a realistic 108k-term English corpus. See [RESULTS.md](RESULTS.md)
+> for the measurements and [PLAN.md](PLAN.md) for the full roadmap.
 
 ## Quick start
 
@@ -154,6 +155,25 @@ token, tries the trigram context first (last two tokens), then falls back to
 the bigram context (last one token). Predictions fill slots the trie left empty
 and are de-duplicated against trie hits so nothing appears twice.
 
+## Benchmarks
+
+Measured on a realistic 108,008-term English corpus (real words, real frequency
+ranks, Zipfian weights) — not random strings, which would let the trie prune
+nothing and misrepresent every result. Full write-up in [RESULTS.md](RESULTS.md).
+
+![Naive vs trie-pruned](benchmarks/results/naive_vs_pruned.svg)
+
+| | Result |
+|---|---|
+| Fuzzy vs naive full-dictionary scan | **245× faster** (E=1), **24× faster** (E=2), identical results |
+| Exact prefix Top-K (4-char prefix, k=5) | p50 12.6 µs, p99 323 µs |
+| Typo correction (E=1) | p50 40 µs, p99 90 µs |
+| Throughput | 199,000 QPS at 16 reader threads, scaling ~linearly |
+
+```sh
+./build/benchmarks/trieste_bench --benchmark_filter=Levenshtein
+```
+
 ## Layout
 
 ```
@@ -173,7 +193,7 @@ data/              sample corpus
 | M2 | Fuzzy search — bounded edit distance (E ≤ 2) over the trie | ✅ done |
 | M3 | Bigram/trigram Markov model for next-token prediction | ✅ done |
 | M4 | Concurrency — `std::shared_mutex` read/write path | ✅ done |
-| M5 | Benchmark suite — p50/p95/p99, multi-threaded QPS, naive vs. pruned | planned |
+| M5 | Benchmark suite — p50/p95/p99, multi-threaded QPS, naive vs. pruned | ✅ done |
 | M6 | Memory and latency optimisation, driven by M5's numbers | planned |
 
 Details and design decisions in [PLAN.md](PLAN.md).

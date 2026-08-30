@@ -80,4 +80,9 @@ Thumbs.db
 desktop.ini
 
 # --- Local, non-portable toolchains -----------------------------------------
-tools/
+# A portable compiler or CMake dropped in here is machine-specific and must not
+# be committed. Tooling SOURCE lives in tools/ too and is explicitly kept.
+tools/*
+!tools/*.cpp
+!tools/*.hpp
+!tools/*.py
