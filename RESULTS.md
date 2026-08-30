@@ -13,7 +13,7 @@ on a realistic English corpus.
 | **Exact prefix Top-K** (2-char prefix, the old worst case) | p95 **12.4 µs**, p99 **22.2 µs** — was 6.3 ms / 11.6 ms |
 | **Typo correction** (E=1) | p50 **43 µs**, p99 **129 µs** |
 | **Next-token prediction** | p50 **4.1 µs**, p99 **11.8 µs** |
-| **Throughput** | **992,000 QPS** at 16 reader threads |
+| **Throughput** | peaks at **1.07M QPS** across 8 threads; saturates there |
 | **Spec targets** (p95 < 2 ms, p99 < 5 ms) | **Met everywhere**, with 160× headroom on the worst case |
 
 M5 found that query cost was dominated by prefix length rather than k — 816×
@@ -100,7 +100,9 @@ Three caveats, stated rather than buried:
 
 **Prefix length dominates everything.**
 
-![Exact prefix latency vs prefix length](benchmarks/results/latency_by_prefix_length.svg)
+*(The prefix-latency chart is not reproduced here. It is generated from the
+current post-M6 data and would contradict the M5 figures in this section; see
+the README for the current curve, and section 8 for the before-and-after.)*
 
 | Prefix length | p50 | p95 | p99 | max |
 |---|---|---|---|---|
@@ -202,7 +204,9 @@ sign the measurement is real rather than an artifact.
 
 ## 6. Throughput and concurrency scaling (M5 baseline)
 
-![QPS vs threads](benchmarks/results/qps_vs_threads.svg)
+*(The throughput chart is not reproduced here. It is generated from the current
+post-M6 data and would contradict the M5 figures in this section; see the README
+for the current curve.)*
 
 | Threads | Prefix reads | Mixed (10% typo) | Reads under a writer |
 |---|---|---|---|
@@ -340,12 +344,21 @@ O(L) descent along the inserted path. At 0.9 µs it is nowhere near a bottleneck
 and it buys two to three orders of magnitude on the read path — which for an
 autocomplete engine is the right side of the trade by a wide margin.
 
-Throughput follows the latency win:
+Throughput follows the latency win. Both columns below are from the same
+session, which is what makes them comparable:
 
 | Threads | Prefix reads before | after |
 |---|---|---|
 | 1 | 7,462 | 147,124 |
-| 16 | 39,795 | **992,462** |
+| 16 | 39,795 | 992,462 |
+
+That after-column figure was a single run. Re-measuring later as the median of
+four independent runs put the post-M6 curve at **1,065,065 QPS peaking at eight
+threads** and 860,836 at sixteen, which is what the README quotes and what
+`benchmarks/results/throughput.csv` records. The M6 improvement is unaffected
+either way; the correction is that read throughput peaks at eight threads rather
+than continuing to climb, which the original single run did not sample densely
+enough to show.
 
 ### Correctness
 

@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="760" height="430" viewBox="0 0 760 430" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif">
 <rect width="760" height="430" fill="#ffffff"/>
 <text x="78" y="26" font-size="16" font-weight="600" fill="#1f2328">Throughput vs thread count</text>
-<text x="78" y="47" font-size="11.5" fill="#6e7781">aggregate queries/sec, wall-clock; dashed line is linear scaling from 2 threads</text>
+<text x="78" y="47" font-size="11.5" fill="#6e7781">aggregate queries/sec, wall-clock; dashed line is ideal linear scaling</text>
 <rect x="78.0" y="64" width="11" height="11" fill="#0969da" rx="2"/>
 <text x="95.0" y="74" font-size="11.5" fill="#1f2328">MixedQueries</text>
 <rect x="194.8" y="64" width="11" height="11" fill="#cf222e" rx="2"/>
@@ -9,37 +9,38 @@
 <rect x="305.5" y="64" width="11" height="11" fill="#1a7f37" rx="2"/>
 <text x="322.5" y="74" font-size="11.5" fill="#1f2328">ReadsUnderWriter</text>
 <line x1="78" y1="368.0" x2="734" y2="368.0" stroke="#d8dee4"/>
-<text x="70" y="372.0" font-size="11" fill="#6e7781" text-anchor="end">0k</text>
+<text x="70" y="372.0" font-size="11" fill="#6e7781" text-anchor="end">0</text>
 <line x1="78" y1="313.6" x2="734" y2="313.6" stroke="#d8dee4"/>
-<text x="70" y="317.6" font-size="11" fill="#6e7781" text-anchor="end">48k</text>
+<text x="70" y="317.6" font-size="11" fill="#6e7781" text-anchor="end">250k</text>
 <line x1="78" y1="259.2" x2="734" y2="259.2" stroke="#d8dee4"/>
-<text x="70" y="263.2" font-size="11" fill="#6e7781" text-anchor="end">96k</text>
+<text x="70" y="263.2" font-size="11" fill="#6e7781" text-anchor="end">500k</text>
 <line x1="78" y1="204.8" x2="734" y2="204.8" stroke="#d8dee4"/>
-<text x="70" y="208.8" font-size="11" fill="#6e7781" text-anchor="end">144k</text>
+<text x="70" y="208.8" font-size="11" fill="#6e7781" text-anchor="end">750k</text>
 <line x1="78" y1="150.4" x2="734" y2="150.4" stroke="#d8dee4"/>
-<text x="70" y="154.4" font-size="11" fill="#6e7781" text-anchor="end">192k</text>
+<text x="70" y="154.4" font-size="11" fill="#6e7781" text-anchor="end">1M</text>
 <line x1="78" y1="96.0" x2="734" y2="96.0" stroke="#d8dee4"/>
-<text x="70" y="100.0" font-size="11" fill="#6e7781" text-anchor="end">240k</text>
-<polyline points="242.0,96.0 406.0,96.0 570.0,96.0 734.0,96.0" fill="none" stroke="#6e7781" stroke-width="1.4" stroke-dasharray="6 5"/>
-<polyline points="78.0,280.6 242.0,150.2 406.0,-18.1 570.0,-417.4 734.0,-746.4" fill="none" stroke="#0969da" stroke-width="2.4"/>
-<circle cx="78.0" cy="280.6" r="3.8" fill="#0969da"/>
-<circle cx="242.0" cy="150.2" r="3.8" fill="#0969da"/>
-<circle cx="406.0" cy="-18.1" r="3.8" fill="#0969da"/>
-<circle cx="570.0" cy="-417.4" r="3.8" fill="#0969da"/>
-<circle cx="734.0" cy="-746.4" r="3.8" fill="#0969da"/>
-<text x="728.0" y="-756.4" font-size="11.5" font-weight="600" fill="#0969da" text-anchor="end">983k</text>
-<polyline points="78.0,201.3 242.0,-94.6 406.0,-398.3 570.0,-726.3 734.0,-756.8" fill="none" stroke="#cf222e" stroke-width="2.4"/>
-<circle cx="78.0" cy="201.3" r="3.8" fill="#cf222e"/>
-<circle cx="242.0" cy="-94.6" r="3.8" fill="#cf222e"/>
-<circle cx="406.0" cy="-398.3" r="3.8" fill="#cf222e"/>
-<circle cx="570.0" cy="-726.3" r="3.8" fill="#cf222e"/>
-<circle cx="734.0" cy="-756.8" r="3.8" fill="#cf222e"/>
-<text x="728.0" y="-766.8" font-size="11.5" font-weight="600" fill="#cf222e" text-anchor="end">992k</text>
-<polyline points="78.0,361.7 406.0,266.4 734.0,164.4" fill="none" stroke="#1a7f37" stroke-width="2.4"/>
-<circle cx="78.0" cy="361.7" r="3.8" fill="#1a7f37"/>
-<circle cx="406.0" cy="266.4" r="3.8" fill="#1a7f37"/>
-<circle cx="734.0" cy="164.4" r="3.8" fill="#1a7f37"/>
-<text x="728.0" y="154.4" font-size="11.5" font-weight="600" fill="#1a7f37" text-anchor="end">180k</text>
+<text x="70" y="100.0" font-size="11" fill="#6e7781" text-anchor="end">1.25M</text>
+<polyline points="78.0,334.8 91.8,332.8 105.6,330.7 119.4,328.4 133.1,326.1 146.9,323.5 160.7,320.9 174.5,318.1 188.3,315.1 202.1,311.9 215.9,308.5 229.7,304.9 243.4,301.2 257.2,297.1 271.0,292.9 284.8,288.4 298.6,283.6 312.4,278.6 326.2,273.2 339.9,267.5 353.7,261.5 367.5,255.1 381.3,248.3 395.1,241.1 408.9,233.5 422.7,225.4 436.5,216.9 450.2,207.8 464.0,198.2 477.8,188.0 491.6,177.2 505.4,165.8 519.2,153.6 533.0,140.8 546.7,127.1 560.5,112.7 574.3,97.4" fill="none" stroke="#6e7781" stroke-width="1.4" stroke-dasharray="6 5"/>
+<text x="568.3" y="111.4" font-size="10.5" fill="#6e7781" text-anchor="end">ideal linear scaling</text>
+<polyline points="78.0,347.9 242.0,328.2 406.0,289.5 570.0,227.8 734.0,169.7" fill="none" stroke="#0969da" stroke-width="2.4"/>
+<circle cx="78.0" cy="347.9" r="3.8" fill="#0969da"/>
+<circle cx="242.0" cy="328.2" r="3.8" fill="#0969da"/>
+<circle cx="406.0" cy="289.5" r="3.8" fill="#0969da"/>
+<circle cx="570.0" cy="227.8" r="3.8" fill="#0969da"/>
+<circle cx="734.0" cy="169.7" r="3.8" fill="#0969da"/>
+<text x="728.0" y="159.7" font-size="11.5" font-weight="600" fill="#0969da" text-anchor="end">911k</text>
+<polyline points="78.0,334.8 242.0,298.5 406.0,241.3 570.0,136.2 734.0,180.7" fill="none" stroke="#cf222e" stroke-width="2.4"/>
+<circle cx="78.0" cy="334.8" r="3.8" fill="#cf222e"/>
+<circle cx="242.0" cy="298.5" r="3.8" fill="#cf222e"/>
+<circle cx="406.0" cy="241.3" r="3.8" fill="#cf222e"/>
+<circle cx="570.0" cy="136.2" r="3.8" fill="#cf222e"/>
+<circle cx="734.0" cy="180.7" r="3.8" fill="#cf222e"/>
+<text x="570.0" y="126.2" font-size="11.5" font-weight="600" fill="#cf222e" text-anchor="middle">1.07M</text>
+<polyline points="78.0,367.0 406.0,354.8 734.0,331.9" fill="none" stroke="#1a7f37" stroke-width="2.4"/>
+<circle cx="78.0" cy="367.0" r="3.8" fill="#1a7f37"/>
+<circle cx="406.0" cy="354.8" r="3.8" fill="#1a7f37"/>
+<circle cx="734.0" cy="331.9" r="3.8" fill="#1a7f37"/>
+<text x="728.0" y="321.9" font-size="11.5" font-weight="600" fill="#1a7f37" text-anchor="end">166k</text>
 <text x="78.0" y="390.0" font-size="12" fill="#1f2328" text-anchor="middle">1</text>
 <text x="242.0" y="390.0" font-size="12" fill="#1f2328" text-anchor="middle">2</text>
 <text x="406.0" y="390.0" font-size="12" fill="#1f2328" text-anchor="middle">4</text>
