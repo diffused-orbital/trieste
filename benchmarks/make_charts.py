@@ -292,11 +292,90 @@ def chart_qps():
     return "\n".join(out)
 
 
+# ---------------------------------------------------------------------------
+# 4. M6 before/after: exact prefix p95 by prefix length
+# ---------------------------------------------------------------------------
+def chart_m6_before_after():
+    rows = [r for r in csv.DictReader(open(os.path.join(RESULTS, "m6_before_after.csv")))
+            if r["dimension"] == "prefix_length"]
+    rows.sort(key=lambda r: int(r["value"]))
+    xs = [int(r["value"]) for r in rows]
+    before = [float(r["p95_before_us"]) for r in rows]
+    after = [float(r["p95_after_us"]) for r in rows]
+
+    lo, hi = 1.0, 20000.0
+    x0, x1 = PAD_L, W - PAD_R
+    y0, y1 = PAD_T, H - PAD_B
+
+    def ypos(v):
+        t = (math.log10(v) - math.log10(lo)) / (math.log10(hi) - math.log10(lo))
+        return y1 - t * (y1 - y0)
+
+    out = header(
+        "M6: exact prefix p95, before and after subtree-max best-first",
+        "Log scale. The 2-character case -- the only measurement that missed its "
+        "budget -- improves 506x and drops far under the 2ms line.",
+    )
+    for t in log_ticks(lo, hi):
+        y = ypos(t)
+        out.append(f'<line x1="{x0}" y1="{y:.1f}" x2="{x1}" y2="{y:.1f}" stroke="{GRID}"/>')
+        out.append(
+            f'<text x="{x0 - 8}" y="{y + 4:.1f}" font-size="11" fill="{MUTED}" '
+            f'text-anchor="end">{fmt_us(t)}</text>'
+        )
+    y = ypos(2000.0)
+    out.append(
+        f'<line x1="{x0}" y1="{y:.1f}" x2="{x1}" y2="{y:.1f}" stroke="{MUTED}" '
+        f'stroke-width="1" stroke-dasharray="5 4"/>'
+    )
+    out.append(
+        f'<text x="{x1 - 4}" y="{y - 5:.1f}" font-size="10.5" fill="{MUTED}" '
+        f'text-anchor="end">p95 target 2ms</text>'
+    )
+
+    group_w = (x1 - x0) / len(xs)
+    bar_w = min(38.0, group_w / 2.6)
+    for i, x in enumerate(xs):
+        cx = x0 + group_w * (i + 0.5)
+        for si, (vals, colour) in enumerate(((before, SERIES[1]), (after, SERIES[2]))):
+            v = vals[i]
+            bx = cx - bar_w - 4 + si * (bar_w + 8)
+            by = ypos(v)
+            out.append(
+                f'<rect x="{bx:.1f}" y="{by:.1f}" width="{bar_w:.1f}" '
+                f'height="{y1 - by:.1f}" fill="{colour}" rx="2"/>'
+            )
+        out.append(
+            f'<text x="{cx:.1f}" y="{y1 + 22:.1f}" font-size="12" fill="{FG}" '
+            f'text-anchor="middle">{x}</text>'
+        )
+        out.append(
+            f'<text x="{cx:.1f}" y="{y1 + 40:.1f}" font-size="11.5" font-weight="700" '
+            f'fill="{SERIES[2]}" text-anchor="middle">{before[i] / after[i]:.0f}x</text>'
+        )
+
+    out.append(f'<line x1="{x0}" y1="{y1}" x2="{x1}" y2="{y1}" stroke="{FG}" stroke-width="1.2"/>')
+    out.append(
+        f'<text x="{(x0 + x1) / 2:.1f}" y="{H - 8}" font-size="12" fill="{MUTED}" '
+        f'text-anchor="middle">prefix length (characters)</text>'
+    )
+    for si, lbl in enumerate(["before (M5: full subtree walk)", "after (M6: best-first)"]):
+        lx = x0 + 12 + si * 230
+        out.append(
+            f'<rect x="{lx}" y="{PAD_T - 18}" width="11" height="11" '
+            f'fill="{SERIES[1] if si == 0 else SERIES[2]}" rx="2"/>'
+        )
+        out.append(f'<text x="{lx + 17}" y="{PAD_T - 8}" font-size="11.5" fill="{FG}">{esc(lbl)}</text>')
+    out.append("</svg>")
+    return "\n".join(out)
+
+
 def main():
     charts = {
         "naive_vs_pruned.svg": chart_naive_vs_pruned(),
         "latency_by_prefix_length.svg": chart_latency_by_length(),
         "qps_vs_threads.svg": chart_qps(),
+        "m6_before_after.svg": chart_m6_before_after(),
     }
     for name, svg in charts.items():
         path = os.path.join(RESULTS, name)

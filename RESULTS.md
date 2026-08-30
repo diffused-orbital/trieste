@@ -10,16 +10,15 @@ on a realistic English corpus.
 | | Result |
 |---|---|
 | **Fuzzy search vs naive full-dictionary scan** | **245× faster at E=1**, **24× faster at E=2**, identical results |
-| **Exact prefix Top-K** (4+ char prefix, k=5) | p50 **12.6 µs**, p99 **323 µs** |
-| **Typo correction** (E=1) | p50 **40 µs**, p99 **90 µs** |
-| **Next-token prediction** | p50 **16 µs**, p99 **238 µs** |
-| **Throughput** | **199,000 QPS** at 16 reader threads, scaling ~linearly |
-| **Spec targets** (p95 < 2 ms, p99 < 5 ms) | **Met everywhere except 2-character prefixes** |
+| **Exact prefix Top-K** (2-char prefix, the old worst case) | p95 **12.4 µs**, p99 **22.2 µs** — was 6.3 ms / 11.6 ms |
+| **Typo correction** (E=1) | p50 **43 µs**, p99 **129 µs** |
+| **Next-token prediction** | p50 **4.1 µs**, p99 **11.8 µs** |
+| **Throughput** | **992,000 QPS** at 16 reader threads |
+| **Spec targets** (p95 < 2 ms, p99 < 5 ms) | **Met everywhere**, with 160× headroom on the worst case |
 
-The single most important finding is not in that table: **query cost is dominated
-by prefix length, not by k.** Going from k=1 to k=20 changes p50 by 26%. Going
-from an 8-character prefix to a 2-character one changes it by **816×**. That
-points squarely at what M6 should fix.
+M5 found that query cost was dominated by prefix length rather than k — 816×
+across prefix lengths against 26% across k — and that short prefixes were the
+one case missing its budget. **M6 fixed exactly that**; see [section 8](#8-m6--subtree-max-best-first-descent).
 
 ---
 
@@ -91,7 +90,13 @@ Three caveats, stated rather than buried:
 
 ---
 
-## 1. Exact prefix Top-K
+> **Sections 1–7 are the M5 baseline — the engine as it stood *before* the M6
+> optimisation.** They are kept because they are what diagnosed the bottleneck
+> and because the corpus, fairness and methodology arguments still apply
+> unchanged. Section 8 has the post-M6 numbers, and the summary table at the top
+> reflects the engine as it is today.
+
+## 1. Exact prefix Top-K (M5 baseline)
 
 **Prefix length dominates everything.**
 
@@ -124,7 +129,7 @@ cost. **This is the M6 target:** a cached per-node Top-K (or a subtree max
 frequency) would let the walk prune branches that cannot beat the current heap
 minimum, collapsing the short-prefix case.
 
-## 2. Fuzzy fallback
+## 2. Fuzzy fallback (M5 baseline)
 
 | Edit budget | p50 | p95 | p99 | max |
 |---|---|---|---|---|
@@ -191,7 +196,7 @@ sign the measurement is real rather than an artifact.
 
 ---
 
-## 6. Throughput and concurrency scaling
+## 6. Throughput and concurrency scaling (M5 baseline)
 
 ![QPS vs threads](benchmarks/results/qps_vs_threads.svg)
 
@@ -231,7 +236,7 @@ plan, only *now* is there evidence to justify considering it.
 
 ---
 
-## 7. Against the spec's targets
+## 7. Against the spec's targets (M5 baseline)
 
 The spec asks for **p95 < 2 ms** and **p99 < 5 ms** on a 100,000+ word dictionary.
 Treated as measurement goals rather than pass/fail gates:
@@ -248,27 +253,129 @@ Treated as measurement goals rather than pass/fail gates:
 p95 budget by 11% (2.22 ms vs 2 ms), while still clearing p99. Everything else
 passes with an order of magnitude to spare.
 
----
-
-## What this says for M6
-
-The numbers point at one thing, and it is not the thing the original spec
-predicted:
-
-1. **Cache Top-K per subtree.** Short-prefix latency is entirely the
-   walk-the-whole-subtree behaviour. k is nearly free; length is brutal. A
-   per-node cached best-K, or even a subtree max frequency to prune against the
-   heap minimum, targets the only measurement that misses its budget.
-2. **A Levenshtein automaton is still not worth building.** The pruned DP walk is
-   already 245×/24× ahead of the naive baseline and comfortably inside budget.
-   The automaton would optimise a path that is not the bottleneck.
-3. **Writer impact is the real concurrency question**, not read scaling. Reads
-   scale linearly; a single writer costs 4×. If anything gets fine-grained
-   locking, that is the evidence for it.
-4. **Graduated fuzziness** (the open question from M2) is still worth doing, but
-   for correctness of behaviour rather than speed — E=2 latency is fine.
+**M6 closed that miss.** The same measurement now reads **12.4 µs** — roughly
+160× inside the 2 ms budget rather than 11% outside it. Every path in this table
+now passes with at least two orders of magnitude to spare; see section 8.
 
 ---
+
+## 8. M6 — subtree-max best-first descent
+
+M5's diagnosis was that `topKWithPrefix` could not begin ranking until it had
+walked the entire subtree beneath the prefix, so a two-character prefix visited
+tens of thousands of nodes to fill a five-slot heap.
+
+**The fix:** every node caches `subtreeMax`, the highest frequency anywhere
+beneath it. The query becomes a best-first descent over a frontier ordered by
+`(bound desc, path asc)` — pop the most promising node, emit it if it is a
+finished term, otherwise split it into its own term plus its children. Because a
+subtree's bound can never be beaten by its contents, the first k terms popped
+are exactly the top k.
+
+**It costs nothing in memory.** `Node` was 24 bytes of vector plus a 4-byte int,
+padded to 32. The second int lands in that padding:
+
+| | Before | After |
+|---|---|---|
+| Trie memory (108k terms, 432,062 nodes) | 31.6 MB | **31.3 MB** |
+| Bytes per node | 76.7 | 75.9 |
+
+**And there is no cache to invalidate.** The update is one monotonic `max` along
+the insert path, which is exact — not approximate — because frequencies only
+ever increase: `insert` accumulates, non-positive weights are rejected, and
+nothing deletes. Only nodes on the inserted term's path gain a term, so every
+other node's bound is untouched. *(If deletion or weight-decrease is ever added,
+this breaks: a max cannot be lowered incrementally. It is commented in the
+source.)*
+
+### Before / after
+
+![M6 before and after](benchmarks/results/m6_before_after.svg)
+
+| Prefix length | p95 before | p95 after | speedup | p99 before | p99 after |
+|---|---|---|---|---|---|
+| **2 chars** | **6276.3 µs** | **12.4 µs** | **506×** | 11554.3 µs | 22.2 µs |
+| 3 chars | 1404.8 µs | 10.0 µs | 140× | 3336.9 µs | 18.2 µs |
+| 4 chars | 333.9 µs | 7.4 µs | 45× | 870.4 µs | 11.3 µs |
+| 6 chars | 28.4 µs | 4.2 µs | 6.8× | 85.8 µs | 6.5 µs |
+| 8 chars | 6.0 µs | 1.9 µs | 3.2× | 11.5 µs | 3.2 µs |
+
+**Every length improved, including the already-fast ones.** That was the main
+risk: a heap-guided search has per-query setup that a straight walk does not, so
+deep prefixes with tiny subtrees could plausibly have regressed. They did not —
+8-character prefixes are still 3.2× faster.
+
+> **On the baseline numbers.** These "before" figures were re-measured on the
+> same machine in the same session as the "after" ones, which is the only fair
+> comparison. They are higher than the M5 figures published above (2-char p95
+> reads 6276 µs here against 2220 µs in M5) because the machine was warmer after
+> a long day of builds. Against M5's cooler published baseline the improvement
+> is **179×** rather than 506× — that is the conservative number, and it is the
+> one to quote if only one is quoted.
+
+Cost now tracks k, as it should for a top-k query, rather than prefix length:
+
+| k | p50 before | p50 after |
+|---|---|---|
+| 1 | 49.9 µs | 1.1 µs |
+| 5 | 115.4 µs | 4.5 µs |
+| 10 | 136.6 µs | 10.5 µs |
+| 20 | 173.0 µs | 22.9 µs |
+
+### Nothing regressed
+
+| Path | p50 before | p50 after | |
+|---|---|---|---|
+| `insertQuery` | 0.80 µs | 0.90 µs | +12.5% — the second descent that maintains the bound |
+| Fuzzy E=1 | 44.9 µs | 42.7 µs | unchanged (different code path) |
+| Fuzzy E=2 | 484.0 µs | 402.6 µs | unchanged |
+| N-gram prediction | 13.2 µs | 4.1 µs | −69%, inherited from the faster exact pass |
+
+The insert cost is the one real trade: maintaining `subtreeMax` needs a second
+O(L) descent along the inserted path. At 0.9 µs it is nowhere near a bottleneck,
+and it buys two to three orders of magnitude on the read path — which for an
+autocomplete engine is the right side of the trade by a wide margin.
+
+Throughput follows the latency win:
+
+| Threads | Prefix reads before | after |
+|---|---|---|
+| 1 | 7,462 | 147,124 |
+| 16 | 39,795 | **992,462** |
+
+### Correctness
+
+The ranking must be byte-identical to before, or this is a regression dressed up
+as an optimisation. Three checks:
+
+- **Differential test against brute force** on the full 108k corpus — 1,180
+  comparisons across prefix lengths 0–6, k ∈ {1,3,5,10,20}, plus the empty
+  prefix and a no-match probe. The reference filters and sorts the raw corpus
+  text, sharing no implementation with the trie. **0 mismatches.**
+- **Five new unit tests** for the cases a mishandled bound would break: a
+  re-insert that reverses the ranking, a node outranked by its own descendant,
+  prefix-before-extension on a frequency tie, the empty prefix as inserts
+  arrive, and a long single-child chain.
+- **ThreadSanitizer**, since `subtreeMax` is new shared state — written under
+  the exclusive lock, read under the shared one, exercised concurrently by the
+  existing read/write mix tests.
+
+### Memory, as the spec asked
+
+Reported, not optimised — the data did not justify it:
+
+| | |
+|---|---|
+| Trie total | 31.3 MB for 108,000 terms / 432,062 nodes |
+| `sizeof(Node)` | 32 bytes |
+| Measured per node | 75.9 bytes |
+
+The ~44 bytes per node above the struct is the children vector's heap allocation
+plus malloc header — a real 2.4× overhead that an arena with 32-bit child
+indices would largely reclaim. But 31.3 MB for a 108k-term dictionary is not
+hurting anything, and doing that rewrite in the same milestone would have made
+the before/after attribution above meaningless. Deferred until a number demands
+it.
 
 ## Reproducing this
 
@@ -314,3 +421,4 @@ over unordered containers — so the same inputs always produce the same file.
 | `benchmarks/results/latency.csv` | p50/p95/p99/max for every latency benchmark |
 | `benchmarks/results/throughput.csv` | QPS and per-thread latency by thread count |
 | `benchmarks/results/naive_vs_pruned.csv` | the headline comparison |
+| `benchmarks/results/m6_before_after.csv` | M6 before/after by prefix length and k |

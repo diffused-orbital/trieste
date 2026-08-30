@@ -219,23 +219,51 @@ Full write-up and charts in [RESULTS.md](RESULTS.md).
 - A single continuous writer costs ~4× read throughput.
 - Spec targets met everywhere except 2-character prefixes (p95 2.22 ms vs 2 ms).
 
-## M6 — Memory and latency optimisation
+## M6 — Memory and latency optimisation  ✅ done
 
-Now driven by M5's numbers rather than guesswork. What they actually point at:
+Driven by M5's numbers. Full before/after in [RESULTS.md](RESULTS.md#8-m6--subtree-max-best-first-descent).
 
-- **Cache Top-K per subtree — the one measurement that misses its budget.**
-  Cost is dominated by prefix length, not k: k=1→20 changes p50 by 26%, while
-  8-char→2-char changes it by 816×. M1's Top-K walks the entire subtree before
-  ranking. A cached per-node best-K, or a subtree max frequency to prune against
-  the heap minimum, targets exactly this.
-- **Writer impact, not read scaling, is the real concurrency question.** Reads
-  scale linearly to 16 threads; one continuous writer costs 4×. That is the
-  evidence M4 said to wait for before considering fine-grained locking.
-- **A Levenshtein automaton is still not worth building.** The pruned DP walk is
-  already 245×/24× ahead of naive and inside budget; the automaton would
-  optimise a path that is not the bottleneck.
-- Compressed / radix nodes to collapse single-child chains, and arena-backed
-  node storage to cut pointer-chasing, remain open — but should be measured
-  against the Top-K caching win first.
-- **Graduated fuzziness** (open since M2) is still worth doing for behaviour,
-  not speed: E=2 latency is comfortably inside budget.
+**Decisions taken**
+
+- *Subtree-max + best-first descent, over cached per-node Top-K.* Every node
+  caches `subtreeMax`, the highest frequency beneath it; the query becomes a
+  best-first descent ordered by `(bound desc, path asc)`. Chosen over the
+  LeetCode-642 style cached Top-K list, which at 432,062 nodes would have added
+  ~41 MB even with 4-byte term IDs — more than doubling a 31.6 MB trie, in a
+  milestone whose other goal was to *reduce* memory. The bound costs nothing:
+  `Node` was 24 bytes of vector plus a 4-byte int padded to 32, and the second
+  int lands in that padding. Measured: 31.6 MB → 31.3 MB.
+- *No cache, therefore no invalidation.* The update is one monotonic `max` along
+  the insert path. It is exact rather than approximate **only because
+  frequencies never decrease** — insert accumulates, non-positive weights are
+  rejected, nothing deletes. Adding a delete or weight-decrease API breaks this
+  and would require recomputing the affected path bottom-up. Commented at the
+  call site.
+- *Memory reported, not optimised.* 75.9 bytes/node against a 32-byte struct, so
+  ~44 bytes is children-vector allocation plus malloc header — a real 2.4×
+  overhead an arena would reclaim. But 31.3 MB for 108k terms hurts nothing, and
+  bundling that rewrite here would have destroyed the before/after attribution.
+
+**Results**
+
+| Prefix length | p95 before | p95 after | speedup |
+|---|---|---|---|
+| 2 chars | 6276.3 µs | **12.4 µs** | **506×** |
+| 3 chars | 1404.8 µs | 10.0 µs | 140× |
+| 4 chars | 333.9 µs | 7.4 µs | 45× |
+| 8 chars | 6.0 µs | 1.9 µs | 3.2× |
+
+- Every prefix length improved — the fast deep-prefix path did not regress.
+- Throughput at 16 threads: 39,795 → **992,462 QPS**.
+- `insertQuery` p50 0.80 → 0.90 µs (+12.5%), the one real trade: a second O(L)
+  descent to maintain the bound.
+- Spec targets now met everywhere, with ~160× headroom on the former worst case.
+- Ranking proven unchanged: 1,180 differential comparisons against a brute-force
+  reference on the full corpus, 0 mismatches, plus 5 new unit tests.
+
+**Still open**
+
+- Arena / compressed nodes, if memory ever becomes a real constraint.
+- Graduated fuzziness (open since M2) — for behaviour, not speed.
+- A true Levenshtein automaton remains unjustified: the pruned DP walk is
+  245×/24× ahead of naive and well inside budget.
