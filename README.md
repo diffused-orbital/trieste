@@ -11,9 +11,10 @@ runs 245 times faster than a naive scan of the whole dictionary at edit distance
 1, and returns provably identical results — the two implementations were checked
 against each other and disagreed on nothing. The worst-case prefix query, which
 was the one path missing its latency budget, improved by a factor of 179 after
-the final optimisation pass, at no cost in memory. Sixteen reader threads sustain
-roughly 992,000 queries per second. The locking is not merely believed to be
-correct: ThreadSanitizer runs in CI on every push and reports no data race.
+the final optimisation pass, at no cost in memory. Read throughput peaks at about
+1.07 million queries per second across eight threads. The locking is not merely
+believed to be correct: ThreadSanitizer runs in CI on every push and reports no
+data race.
 
 All six planned milestones are complete: the trie and ranked prefix search,
 bounded fuzzy correction, the n-gram model, the concurrent read path, the
@@ -173,8 +174,11 @@ counts; it reports zero mismatches.
 
 ![Exact prefix latency by prefix length](benchmarks/results/latency_by_prefix_length.svg)
 
-The chart above shows the state before the final optimisation, and it is the
-measurement that drove that work. Cost tracked prefix length rather than k. A
+That is the current state: every prefix length lands between 0.6 µs and 22 µs
+across p50, p95 and p99, and the curve is nearly flat. It was not always so, and
+how it got there is the most interesting measurement in the project.
+
+Before the final optimisation, cost tracked prefix length rather than k. A
 two-character prefix took 2.22 ms at p95, missing the 2 ms target, while an
 eight-character prefix took 6 µs. Raising k from 1 to 20 moved p50 by 26
 percent; shortening the prefix from eight characters to two moved it by a factor
@@ -222,18 +226,40 @@ orders of magnitude.
 
 ![Throughput against thread count](benchmarks/results/qps_vs_threads.svg)
 
-Reads scale close to linearly. Per-thread latency stays flat as threads are
-added, which is the clearest evidence that the shared lock is doing its job
-rather than serialising readers. A single continuous writer costs roughly a
-factor of four in read throughput, which is inherent to one exclusive lock and
-is the number that would justify finer-grained locking if it ever became worth
-the complexity.
+Read throughput scales close to linearly up to eight threads and then stops.
+Peak is about 1.07 million queries per second at eight threads, which is 6.98
+times the single-thread figure for an eight-fold increase in threads, or 87
+percent scaling efficiency. Per-thread latency stays flat across that range,
+6.6 µs at one thread against 7.5 µs at eight, so the shared lock is not
+serialising readers.
+
+At sixteen threads throughput falls back to about 861,000 and per-thread latency
+roughly triples to 18.6 µs. The machine is the likely explanation rather than
+the lock: an i9-13900H has six performance cores and eight efficiency cores, so
+past eight threads the work spills onto efficiency cores and hyperthread
+siblings. Whatever the cause, the honest statement is that this engine saturates
+near a million reads per second on this hardware, and adding threads beyond
+eight does not help.
 
 | Threads | Prefix reads | Mixed, 10% typos | Reads under a writer |
 |---|---|---|---|
-| 1 | 147,124 | 77,116 | 5,555 |
-| 4 | 676,135 | 340,668 | 89,639 |
-| 16 | 992,462 | 983,308 | 179,612 |
+| 1 | 152,654 | 92,421 | 4,584 |
+| 2 | 319,184 | 182,914 | — |
+| 4 | 582,353 | 360,684 | 60,849 |
+| 8 | **1,065,065** | 644,148 | — |
+| 16 | 860,836 | 911,258 | 166,050 |
+
+A single continuous writer is expensive for readers, costing somewhere between
+five and ten times the read throughput depending on thread count. That is
+inherent to one exclusive lock, and it is the measurement that would justify
+finer-grained locking if the workload ever warranted the complexity. It is also
+the noisiest thing measured here, 42 to 75 percent spread between runs, so treat
+it as an order of magnitude rather than a figure.
+
+Every number above is the median of four independent runs; run-to-run spread is
+recorded per row in `benchmarks/results/throughput.csv`. The single-thread
+figures carry the widest spread, around 30 percent, which is consistent with a
+lone thread being scheduled onto either core type.
 
 ### Method
 
@@ -334,8 +360,9 @@ bytes per node regardless of how many children that node actually has.
 Concurrency is one `std::shared_mutex` guarding the trie and the n-gram model
 together. Reads take it shared, writes exclusively. Nothing more elaborate was
 built, because until the benchmarks existed there was no evidence that anything
-more elaborate was needed, and the throughput numbers now show reads scaling
-close to linearly.
+more elaborate was needed, and the throughput numbers show reads scaling close
+to linearly up to eight threads before the hardware, rather than the lock, runs
+out of room.
 
 Establishing that this is actually race-free took more than running the tests. A
 stress test can only report a race that some interleaving happened to expose,

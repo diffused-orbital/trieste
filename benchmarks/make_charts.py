@@ -107,6 +107,32 @@ def fmt_val(v):
     return f"{v:.1f} us"
 
 
+def fmt_qps(v):
+    """Axis labels for queries per second."""
+    if v >= 1_000_000:
+        return f"{v / 1_000_000:.3g}M"
+    if v >= 1000:
+        return f"{v / 1000:.0f}k"
+    return f"{v:.0f}"
+
+
+def nice_axis(maxv, target_ticks=5):
+    """Round an axis maximum up to a readable tick step that contains `maxv`.
+
+    Returns (axis_max, step). Derived from the data so an axis can never again
+    be left pinned to a stale constant while the numbers move underneath it.
+    """
+    if maxv <= 0:
+        return 1.0, 1.0
+    raw = maxv / target_ticks
+    magnitude = 10 ** math.floor(math.log10(raw))
+    for multiple in (1, 2, 2.5, 5, 10):
+        step = multiple * magnitude
+        if raw <= step:
+            break
+    return math.ceil(maxv / step) * step, step
+
+
 # ---------------------------------------------------------------------------
 # 1. Naive full-dictionary Levenshtein vs the trie-pruned walk
 # ---------------------------------------------------------------------------
@@ -250,7 +276,14 @@ def chart_qps():
         v.sort()
 
     threads = [1, 2, 4, 8, 16]
-    hi = 240000.0
+
+    # The axis maximum is derived from the data, never hardcoded. It was
+    # previously pinned at 240k, which was right for the pre-optimisation
+    # numbers and silently wrong afterwards: points above the cap mapped to
+    # negative y and were drawn outside the plot, over the title.
+    peak = max(q for series in by_workload.values() for _, q in series)
+    hi, step = nice_axis(peak * 1.06)
+
     x0, x1 = PAD_L, W - PAD_R
     y0, y1 = PAD_T, H - PAD_B
 
@@ -262,24 +295,40 @@ def chart_qps():
 
     out = header(
         "Throughput vs thread count",
-        "aggregate queries/sec, wall-clock; dashed line is linear scaling from 2 threads",
+        "aggregate queries/sec, wall-clock; dashed line is ideal linear scaling",
         [(name, SERIES[i % len(SERIES)]) for i, name in enumerate(sorted(by_workload))],
     )
-    for i in range(0, 6):
-        v = hi * i / 5
+    v = 0.0
+    while v <= hi + 1:
         y = ypos(v)
         out.append(f'<line x1="{x0}" y1="{y:.1f}" x2="{x1}" y2="{y:.1f}" stroke="{GRID}"/>')
         out.append(
             f'<text x="{x0 - 8}" y="{y + 4:.1f}" font-size="11" fill="{MUTED}" '
-            f'text-anchor="end">{v / 1000:.0f}k</text>'
+            f'text-anchor="end">{fmt_qps(v)}</text>'
         )
+        v += step
 
-    base = dict(by_workload["PrefixReads"])[2] / 2.0
-    pts = " ".join(f"{xpos(t):.1f},{ypos(min(base * t, hi)):.1f}" for t in threads if t >= 2)
-    out.append(
-        f'<polyline points="{pts}" fill="none" stroke="{MUTED}" stroke-width="1.4" '
-        f'stroke-dasharray="6 5"/>'
-    )
+    # Ideal scaling from the single-thread figure. It leaves the top of the
+    # chart before 16 threads, so it is clipped at the axis maximum rather than
+    # drawn off-canvas; the gap between it and the measured curve is the point.
+    base = dict(by_workload["PrefixReads"])[1]
+    ideal = []
+    t = 1.0
+    while t <= 16.0001:
+        if base * t > hi:
+            break
+        ideal.append(f"{xpos(t):.1f},{ypos(base * t):.1f}")
+        t *= 1.06
+    if len(ideal) > 1:
+        out.append(
+            f'<polyline points="{" ".join(ideal)}" fill="none" stroke="{MUTED}" '
+            f'stroke-width="1.4" stroke-dasharray="6 5"/>'
+        )
+        lx, ly = ideal[-1].split(",")
+        out.append(
+            f'<text x="{float(lx) - 6:.1f}" y="{float(ly) + 14:.1f}" font-size="10.5" '
+            f'fill="{MUTED}" text-anchor="end">ideal linear scaling</text>'
+        )
 
     for si, (name, series) in enumerate(sorted(by_workload.items())):
         colour = SERIES[si % len(SERIES)]
@@ -287,10 +336,15 @@ def chart_qps():
         out.append(f'<polyline points="{pts}" fill="none" stroke="{colour}" stroke-width="2.4"/>')
         for t, q in series:
             out.append(f'<circle cx="{xpos(t):.1f}" cy="{ypos(q):.1f}" r="3.8" fill="{colour}"/>')
-        lt, lq = series[-1]
+        # Label the PEAK rather than the last point. PrefixReads tops out at 8
+        # threads and falls back at 16, so labelling the right-hand end would
+        # quietly report a number lower than the series actually reaches.
+        pt, pq = max(series, key=lambda tq: tq[1])
+        anchor = "end" if pt == 16 else "middle"
+        dx = -6 if pt == 16 else 0
         out.append(
-            f'<text x="{xpos(lt) - 6:.1f}" y="{ypos(lq) - 10:.1f}" font-size="11.5" '
-            f'font-weight="600" fill="{colour}" text-anchor="end">{lq / 1000:.0f}k</text>'
+            f'<text x="{xpos(pt) + dx:.1f}" y="{ypos(pq) - 10:.1f}" font-size="11.5" '
+            f'font-weight="600" fill="{colour}" text-anchor="{anchor}">{fmt_qps(pq)}</text>'
         )
 
     for t in threads:
