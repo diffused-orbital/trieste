@@ -31,6 +31,12 @@ const Trie::Node* Trie::findChild(const Node& node, char c) noexcept {
     return it->second.get();
 }
 
+Trie::Node* Trie::findChild(Node& node, char c) noexcept {
+    // const_cast is safe and contained: the const overload performs a pure
+    // lookup and `node` is non-const here, so no const object is ever written.
+    return const_cast<Node*>(findChild(const_cast<const Node&>(node), c));
+}
+
 Trie::Node& Trie::findOrCreateChild(Node& node, char c, std::size_t& nodeCount) {
     const auto it = std::lower_bound(
         node.children.begin(), node.children.end(), c,
@@ -58,6 +64,29 @@ void Trie::insert(std::string_view word, int weight) {
         ++termCount_;  // first time we have seen this exact term
     }
     current->frequency += weight;  // accumulate, don't overwrite
+    const int updated = current->frequency;
+
+    // M6: raise subtreeMax along the path just walked.
+    //
+    // A second descent rather than remembering the path: it is another O(L)
+    // of binary searches over nodes already in cache, and it keeps insert
+    // allocation-free, which matters because this runs under the write lock.
+    //
+    // A plain max is sufficient ONLY because frequencies never decrease --
+    // insert accumulates, non-positive weights are rejected, and nothing
+    // deletes. That makes this exact rather than approximate: no other term's
+    // frequency moved, and only nodes on this path gained a term, so every
+    // other node's subtreeMax is untouched and cannot go stale.
+    //
+    // If a delete or weight-decrease API is ever added, THIS BREAKS: a max
+    // cannot be lowered incrementally, and the affected path would have to be
+    // recomputed bottom-up from its children.
+    Node* node = root_.get();
+    node->subtreeMax = std::max(node->subtreeMax, updated);
+    for (const char c : word) {
+        node = findChild(*node, c);  // just created above, so it exists
+        node->subtreeMax = std::max(node->subtreeMax, updated);
+    }
 }
 
 const Trie::Node* Trie::descend(std::string_view prefix) const noexcept {
@@ -76,26 +105,6 @@ int Trie::frequencyOf(std::string_view word) const {
     return node != nullptr ? node->frequency : 0;
 }
 
-void Trie::collectInto(const Node& node, std::string& path, std::size_t k, TopKHeap& heap) {
-    if (node.frequency > 0) {
-        if (heap.size() < k) {
-            heap.push(ScoredTerm{path, node.frequency});
-        } else if (ranksBefore(ScoredTerm{path, node.frequency}, heap.top())) {
-            // The heap is full and this candidate beats the weakest survivor:
-            // evict, then admit. Candidates that lose here cost one comparison
-            // and no allocation.
-            heap.pop();
-            heap.push(ScoredTerm{path, node.frequency});
-        }
-    }
-    // Alphabetical order, because `children` is sorted -- the walk is stable.
-    for (const auto& [character, child] : node.children) {
-        path.push_back(character);
-        collectInto(*child, path, k, heap);
-        path.pop_back();  // reuse one buffer for the whole traversal
-    }
-}
-
 std::vector<ScoredTerm> Trie::topKWithPrefix(std::string_view prefix, std::size_t k) const {
     if (k == 0) {
         return {};
@@ -105,20 +114,54 @@ std::vector<ScoredTerm> Trie::topKWithPrefix(std::string_view prefix, std::size_
         return {};
     }
 
-    // M1 scans the whole subtree under the prefix. That is the "correct and
-    // simple" baseline; TODO(M6) caches a per-node Top-K (or a subtree max
-    // frequency) so this walk can prune branches that cannot beat heap.top().
-    TopKHeap heap;
-    std::string path(prefix);
-    collectInto(*start, path, k, heap);
+    // M6: best-first descent, replacing M1's walk-the-entire-subtree-then-rank.
+    //
+    // M5 measured the problem precisely: cost tracked prefix LENGTH, not k. A
+    // two-character prefix visited tens of thousands of nodes to fill a
+    // five-slot heap, because ranking cannot begin until the whole subtree has
+    // been seen. Raising k from 1 to 20 moved p50 by 26%; shortening the prefix
+    // from 8 characters to 2 moved it by 816x.
+    //
+    // subtreeMax turns that around. Each node carries an upper bound on
+    // everything beneath it, so the search can always tell which branch holds
+    // the next best answer without looking inside. It expands O(k * depth)
+    // nodes rather than the entire subtree, and stops the moment k terms are
+    // out -- the rest of the subtree is never touched.
+    std::vector<Candidate> storage;
+    storage.reserve(32);
+    std::priority_queue<Candidate, std::vector<Candidate>, WorseFirst> frontier(
+        WorseFirst{}, std::move(storage));
+
+    frontier.push(Candidate{start->subtreeMax, std::string(prefix), start});
 
     std::vector<ScoredTerm> results;
-    results.reserve(heap.size());
-    while (!heap.empty()) {
-        results.push_back(heap.top());  // drains weakest-first
-        heap.pop();
+    results.reserve(k);
+
+    while (!frontier.empty() && results.size() < k) {
+        Candidate best = std::move(const_cast<Candidate&>(frontier.top()));
+        frontier.pop();
+
+        if (best.node == nullptr) {
+            // A finished term. Nothing in the frontier can outrank it: every
+            // remaining entry has a lower bound, or an equal bound and a later
+            // path.
+            results.push_back(ScoredTerm{std::move(best.path), best.bound});
+            continue;
+        }
+
+        // An unexplored subtree. Split it into its own term (if it holds one)
+        // plus one entry per child, each with its own bound. The maximum bound
+        // is preserved across the split, because a node's subtreeMax is by
+        // definition the max of its own frequency and its children's bounds --
+        // so nothing is ever lost or reordered by expanding.
+        if (best.node->frequency > 0) {
+            frontier.push(Candidate{best.node->frequency, best.path, nullptr});
+        }
+        for (const auto& [character, child] : best.node->children) {
+            frontier.push(Candidate{child->subtreeMax, best.path + character, child.get()});
+        }
     }
-    std::reverse(results.begin(), results.end());  // ...so reverse to best-first
+
     return results;
 }
 

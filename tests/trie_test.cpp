@@ -147,6 +147,73 @@ TEST(TrieTopK, EvictsCorrectlyWhenTheWinnerArrivesLast) {
     EXPECT_EQ(termsOf(trie.topKWithPrefix("c", 2)), (std::vector<std::string>{"cd", "cc"}));
 }
 
+// ---- M6: subtreeMax maintenance -----------------------------------------
+//
+// topKWithPrefix now descends best-first using each node's cached subtree
+// maximum instead of walking the whole subtree. These pin the cases where a
+// stale or wrongly-maintained bound would silently reorder results.
+
+TEST(TrieTopK, RankingFollowsRepeatedInsertsThatChangeTheOrder) {
+    Trie trie;
+    trie.insert("alpha", 100);
+    trie.insert("alps", 50);
+    EXPECT_EQ(termsOf(trie.topKWithPrefix("al", 2)),
+              (std::vector<std::string>{"alpha", "alps"}));
+
+    // Push the runner-up past the leader. The cached bounds on "a" and "al"
+    // must rise with it, or the winner never surfaces.
+    trie.insert("alps", 500);
+    EXPECT_EQ(termsOf(trie.topKWithPrefix("al", 2)),
+              (std::vector<std::string>{"alps", "alpha"}));
+}
+
+TEST(TrieTopK, NodeWhoseOwnTermRanksBelowItsDescendant) {
+    // "app" is a term in its own right but is outranked by something beneath
+    // it. The bound on "app" is 1000 (from "apple"), not its own 500, so the
+    // walk must not mistake the node for the answer when it pops it.
+    Trie trie;
+    trie.insert("app", 500);
+    trie.insert("apple", 1000);
+    trie.insert("apply", 700);
+    EXPECT_EQ(termsOf(trie.topKWithPrefix("app", 3)),
+              (std::vector<std::string>{"apple", "apply", "app"}));
+}
+
+TEST(TrieTopK, PrefixThatIsAlsoATermSortsAheadOfItsExtensionsOnATie) {
+    // Equal frequencies: a prefix must precede anything extending it, which is
+    // what keeps the best-first order identical to a full sort.
+    Trie trie;
+    trie.insert("go", 10);
+    trie.insert("goal", 10);
+    trie.insert("going", 10);
+    EXPECT_EQ(termsOf(trie.topKWithPrefix("go", 3)),
+              (std::vector<std::string>{"go", "goal", "going"}));
+}
+
+TEST(TrieTopK, EmptyPrefixStaysCorrectAsInsertsArrive) {
+    // The empty prefix reads the root's bound, the one most likely to be left
+    // stale by a faulty update.
+    Trie trie;
+    trie.insert("aaa", 1);
+    EXPECT_EQ(termsOf(trie.topKWithPrefix("", 1)), (std::vector<std::string>{"aaa"}));
+    trie.insert("zzz", 2);
+    EXPECT_EQ(termsOf(trie.topKWithPrefix("", 1)), (std::vector<std::string>{"zzz"}));
+    trie.insert("mmm", 3);
+    EXPECT_EQ(termsOf(trie.topKWithPrefix("", 2)),
+              (std::vector<std::string>{"mmm", "zzz"}));
+}
+
+TEST(TrieTopK, DeepChainDoesNotLoseTheAnswer) {
+    // One long single-child chain: every node on it carries the same bound, so
+    // the walk must keep descending rather than stopping at the first node
+    // whose bound equals the target.
+    Trie trie;
+    trie.insert("abcdefghijklmnop", 42);
+    trie.insert("abcdefghijklmnoq", 7);
+    EXPECT_EQ(termsOf(trie.topKWithPrefix("abc", 2)),
+              (std::vector<std::string>{"abcdefghijklmnop", "abcdefghijklmnoq"}));
+}
+
 TEST(TrieMisc, ClearResetsEverything) {
     Trie trie = specCorpus();
     trie.clear();

@@ -8,7 +8,7 @@ bounded typo correction (edit distance ≤ 2) when exact matching comes up short
 The roadmap adds an n-gram context model for multi-word input and a concurrent
 read path — each stage measured by a Google Benchmark suite rather than assumed.
 
-> **Status: Milestone 5.** The trie, corpus loading, exact prefix search, Top-K
+> **Status: Milestone 6.** The trie, corpus loading, exact prefix search, Top-K
 > ranking, bounded typo correction, bigram/trigram next-token prediction, and the
 > `std::shared_mutex` read/write path are all implemented and tested, and
 > benchmarked on a realistic 108k-term English corpus. See [RESULTS.md](RESULTS.md)
@@ -163,12 +163,14 @@ nothing and misrepresent every result. Full write-up in [RESULTS.md](RESULTS.md)
 
 ![Naive vs trie-pruned](benchmarks/results/naive_vs_pruned.svg)
 
+![M6 before and after](benchmarks/results/m6_before_after.svg)
+
 | | Result |
 |---|---|
 | Fuzzy vs naive full-dictionary scan | **245× faster** (E=1), **24× faster** (E=2), identical results |
-| Exact prefix Top-K (4-char prefix, k=5) | p50 12.6 µs, p99 323 µs |
-| Typo correction (E=1) | p50 40 µs, p99 90 µs |
-| Throughput | 199,000 QPS at 16 reader threads, scaling ~linearly |
+| Exact prefix Top-K (2-char prefix, the worst case) | p95 **12.4 µs** — 506× faster after M6 |
+| Typo correction (E=1) | p50 43 µs, p99 129 µs |
+| Throughput | **992,000 QPS** at 16 reader threads |
 
 ```sh
 ./build/benchmarks/trieste_bench --benchmark_filter=Levenshtein
@@ -194,7 +196,7 @@ data/              sample corpus
 | M3 | Bigram/trigram Markov model for next-token prediction | ✅ done |
 | M4 | Concurrency — `std::shared_mutex` read/write path | ✅ done |
 | M5 | Benchmark suite — p50/p95/p99, multi-threaded QPS, naive vs. pruned | ✅ done |
-| M6 | Memory and latency optimisation, driven by M5's numbers | planned |
+| M6 | Latency optimisation — subtree-max best-first Top-K | ✅ done |
 
 Details and design decisions in [PLAN.md](PLAN.md).
 

@@ -10,18 +10,18 @@
 <text x="70" y="176.6" font-size="11" fill="#6e7781" text-anchor="end">1 ms</text>
 <line x1="78" y1="79.9" x2="734" y2="79.9" stroke="#d8dee4"/>
 <text x="70" y="83.9" font-size="11" fill="#6e7781" text-anchor="end">10 ms</text>
-<rect x="158.0" y="82.9" width="74" height="275.1" fill="#0969da" rx="3"/>
-<text x="195.0" y="75.9" font-size="12" font-weight="600" fill="#1f2328" text-anchor="middle">9.28 ms</text>
-<rect x="252.0" y="304.5" width="74" height="53.5" fill="#cf222e" rx="3"/>
-<text x="289.0" y="297.5" font-size="12" font-weight="600" fill="#1f2328" text-anchor="middle">37.8 us</text>
+<rect x="158.0" y="76.9" width="74" height="281.1" fill="#0969da" rx="3"/>
+<text x="195.0" y="69.9" font-size="12" font-weight="600" fill="#1f2328" text-anchor="middle">10.77 ms</text>
+<rect x="252.0" y="302.5" width="74" height="55.5" fill="#cf222e" rx="3"/>
+<text x="289.0" y="295.5" font-size="12" font-weight="600" fill="#1f2328" text-anchor="middle">39.7 us</text>
 <text x="242.0" y="380.0" font-size="12.5" fill="#1f2328" text-anchor="middle">E = 1</text>
-<text x="242.0" y="399.0" font-size="13" font-weight="700" fill="#1a7f37" text-anchor="middle">245x faster</text>
-<rect x="486.0" y="81.9" width="74" height="276.1" fill="#0969da" rx="3"/>
-<text x="523.0" y="74.9" font-size="12" font-weight="600" fill="#1f2328" text-anchor="middle">9.52 ms</text>
-<rect x="580.0" y="209.7" width="74" height="148.3" fill="#cf222e" rx="3"/>
-<text x="617.0" y="202.7" font-size="12" font-weight="600" fill="#1f2328" text-anchor="middle">398 us</text>
+<text x="242.0" y="399.0" font-size="13" font-weight="700" fill="#1a7f37" text-anchor="middle">271x faster</text>
+<rect x="486.0" y="77.5" width="74" height="280.5" fill="#0969da" rx="3"/>
+<text x="523.0" y="70.5" font-size="12" font-weight="600" fill="#1f2328" text-anchor="middle">10.62 ms</text>
+<rect x="580.0" y="200.8" width="74" height="157.2" fill="#cf222e" rx="3"/>
+<text x="617.0" y="193.8" font-size="12" font-weight="600" fill="#1f2328" text-anchor="middle">496 us</text>
 <text x="570.0" y="380.0" font-size="12.5" fill="#1f2328" text-anchor="middle">E = 2</text>
-<text x="570.0" y="399.0" font-size="13" font-weight="700" fill="#1a7f37" text-anchor="middle">24x faster</text>
+<text x="570.0" y="399.0" font-size="13" font-weight="700" fill="#1a7f37" text-anchor="middle">21x faster</text>
 <line x1="78" y1="358" x2="734" y2="358" stroke="#1f2328" stroke-width="1.2"/>
 <rect x="90" y="34" width="11" height="11" fill="#0969da" rx="2"/>
 <text x="107" y="44" font-size="11.5" fill="#1f2328">Naive O(N*M) scan</text>

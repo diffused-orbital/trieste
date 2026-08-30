@@ -73,7 +73,6 @@ public:
     /// term carries the prefix.
     [[nodiscard]] std::vector<ScoredTerm> topKWithPrefix(std::string_view prefix, std::size_t k) const;
 
-    /// Accumulated frequency of an exact term; 0 if it was never inserted.
     /// Instrumentation for a single fuzzySearch call. The caller owns it, so the
     /// search stays const and stays safe to run concurrently once M4 lands --
     /// caching counters on the Trie itself would have made that impossible.
@@ -100,6 +99,7 @@ public:
                                                       int maxDistance,
                                                       FuzzyStats* stats = nullptr) const;
 
+    /// Accumulated frequency of an exact term; 0 if it was never inserted.
     [[nodiscard]] int frequencyOf(std::string_view word) const;
     [[nodiscard]] bool contains(std::string_view word) const { return frequencyOf(word) > 0; }
 
@@ -116,34 +116,55 @@ private:
         std::vector<std::pair<char, std::unique_ptr<Node>>> children;
         /// > 0 marks the end of a stored term and carries its weight.
         int frequency = 0;
+        /// M6: the highest frequency of any term in this node's subtree,
+        /// including this node itself. Lets topKWithPrefix descend straight at
+        /// the best answers instead of walking the whole subtree.
+        ///
+        /// FREE, as it happens: the struct was 24 bytes of vector + 4 of int,
+        /// padded to 32. This second int lands in that padding, so a 432,062
+        /// node trie pays nothing for it. Measured, not assumed.
+        int subtreeMax = 0;
     };
 
-    /// Bounded min-heap for Top-K selection.
+    /// One entry in the best-first frontier used by topKWithPrefix.
     ///
-    /// std::priority_queue exposes the GREATEST element under its comparator at
-    /// top(). Feeding it `ranksBefore` -- "lhs outranks rhs" -- therefore parks
-    /// the WEAKEST surviving candidate at top(), which is exactly the element we
-    /// want to evict. That inversion is the whole trick: the heap never grows
-    /// past k, so scanning a subtree of n terms costs O(n log k) time and O(k)
-    /// space instead of sorting all n.
-    struct WeakestOnTop {
-        bool operator()(const ScoredTerm& lhs, const ScoredTerm& rhs) const noexcept {
-            return ranksBefore(lhs, rhs);
+    /// Two kinds share the queue, distinguished by `node`:
+    ///   * node == nullptr -- a concrete TERM, ready to emit; `bound` is its
+    ///     own frequency.
+    ///   * node != nullptr -- an unexplored SUBTREE; `bound` is its
+    ///     subtreeMax, an upper bound on anything it still contains.
+    /// Because a subtree's bound can never be beaten by its contents, popping
+    /// the highest bound always yields the next term in ranking order.
+    struct Candidate {
+        int bound;
+        std::string path;
+        const Node* node;  // nullptr => `path` is a finished term
+    };
+
+    /// std::priority_queue surfaces the GREATEST element under its comparator,
+    /// so this reports "lhs is WORSE than rhs" to make top() the best.
+    ///
+    /// The path tie-break is what preserves the engine's (frequency desc, term
+    /// asc) order through a best-first walk: every term under a node shares
+    /// that node's path as a prefix, so ordering nodes lexicographically also
+    /// orders their entire subtrees. A node's own term sorts ahead of its
+    /// descendants for free, since a prefix precedes anything extending it.
+    struct WorseFirst {
+        bool operator()(const Candidate& lhs, const Candidate& rhs) const {
+            if (lhs.bound != rhs.bound) {
+                return lhs.bound < rhs.bound;  // lower frequency is worse
+            }
+            return lhs.path > rhs.path;  // later in the alphabet is worse
         }
     };
-    using TopKHeap = std::priority_queue<ScoredTerm, std::vector<ScoredTerm>, WeakestOnTop>;
 
     [[nodiscard]] static const Node* findChild(const Node& node, char c) noexcept;
+    [[nodiscard]] static Node* findChild(Node& node, char c) noexcept;
     [[nodiscard]] static Node& findOrCreateChild(Node& node, char c, std::size_t& nodeCount);
 
     /// Walk `prefix` from the root. Returns nullptr if the path does not exist.
     [[nodiscard]] const Node* descend(std::string_view prefix) const noexcept;
 
-    /// Depth-first walk of a subtree, offering every terminal node to `heap`.
-    /// `path` is a reusable buffer carrying the characters spelled so far, so
-    /// the walk allocates a string only for candidates that actually enter the
-    /// heap rather than for every node visited.
-    static void collectInto(const Node& node, std::string& path, std::size_t k, TopKHeap& heap);
 
     /// Mutable state threaded through one fuzzy traversal: the query, the edit
     /// budget, the reusable DP rows, the hits, and the counters. Defined in
