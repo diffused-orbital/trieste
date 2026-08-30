@@ -1,43 +1,43 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="760" height="420" viewBox="0 0 760 420" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif">
-<rect width="760" height="420" fill="#ffffff"/>
-<text x="78" y="26" font-size="16" font-weight="600" fill="#1f2328">M6: exact prefix p95, before and after subtree-max best-first</text>
-<text x="78" y="44" font-size="11.5" fill="#6e7781">Log scale. The 2-character case -- the only measurement that missed its budget -- improves 506x and drops far under the 2ms line.</text>
-<line x1="78" y1="358.0" x2="734" y2="358.0" stroke="#d8dee4"/>
-<text x="70" y="362.0" font-size="11" fill="#6e7781" text-anchor="end">1 us</text>
-<line x1="78" y1="286.9" x2="734" y2="286.9" stroke="#d8dee4"/>
-<text x="70" y="290.9" font-size="11" fill="#6e7781" text-anchor="end">10 us</text>
-<line x1="78" y1="215.7" x2="734" y2="215.7" stroke="#d8dee4"/>
-<text x="70" y="219.7" font-size="11" fill="#6e7781" text-anchor="end">100 us</text>
-<line x1="78" y1="144.6" x2="734" y2="144.6" stroke="#d8dee4"/>
-<text x="70" y="148.6" font-size="11" fill="#6e7781" text-anchor="end">1 ms</text>
-<line x1="78" y1="73.4" x2="734" y2="73.4" stroke="#d8dee4"/>
-<text x="70" y="77.4" font-size="11" fill="#6e7781" text-anchor="end">10 ms</text>
-<line x1="78" y1="123.1" x2="734" y2="123.1" stroke="#6e7781" stroke-width="1" stroke-dasharray="5 4"/>
-<text x="730" y="118.1" font-size="10.5" fill="#6e7781" text-anchor="end">p95 target 2ms</text>
-<rect x="101.6" y="87.8" width="38.0" height="270.2" fill="#cf222e" rx="2"/>
-<rect x="147.6" y="280.2" width="38.0" height="77.8" fill="#1a7f37" rx="2"/>
-<text x="143.6" y="380.0" font-size="12" fill="#1f2328" text-anchor="middle">2</text>
-<text x="143.6" y="398.0" font-size="11.5" font-weight="700" fill="#1a7f37" text-anchor="middle">506x</text>
-<rect x="232.8" y="134.1" width="38.0" height="223.9" fill="#cf222e" rx="2"/>
-<rect x="278.8" y="286.9" width="38.0" height="71.1" fill="#1a7f37" rx="2"/>
-<text x="274.8" y="380.0" font-size="12" fill="#1f2328" text-anchor="middle">3</text>
-<text x="274.8" y="398.0" font-size="11.5" font-weight="700" fill="#1a7f37" text-anchor="middle">140x</text>
-<rect x="364.0" y="178.5" width="38.0" height="179.5" fill="#cf222e" rx="2"/>
-<rect x="410.0" y="296.2" width="38.0" height="61.8" fill="#1a7f37" rx="2"/>
-<text x="406.0" y="380.0" font-size="12" fill="#1f2328" text-anchor="middle">4</text>
-<text x="406.0" y="398.0" font-size="11.5" font-weight="700" fill="#1a7f37" text-anchor="middle">45x</text>
-<rect x="495.2" y="254.6" width="38.0" height="103.4" fill="#cf222e" rx="2"/>
-<rect x="541.2" y="313.7" width="38.0" height="44.3" fill="#1a7f37" rx="2"/>
-<text x="537.2" y="380.0" font-size="12" fill="#1f2328" text-anchor="middle">6</text>
-<text x="537.2" y="398.0" font-size="11.5" font-weight="700" fill="#1a7f37" text-anchor="middle">7x</text>
-<rect x="626.4" y="302.6" width="38.0" height="55.4" fill="#cf222e" rx="2"/>
-<rect x="672.4" y="338.2" width="38.0" height="19.8" fill="#1a7f37" rx="2"/>
-<text x="668.4" y="380.0" font-size="12" fill="#1f2328" text-anchor="middle">8</text>
-<text x="668.4" y="398.0" font-size="11.5" font-weight="700" fill="#1a7f37" text-anchor="middle">3x</text>
-<line x1="78" y1="358" x2="734" y2="358" stroke="#1f2328" stroke-width="1.2"/>
-<text x="406.0" y="412" font-size="12" fill="#6e7781" text-anchor="middle">prefix length (characters)</text>
-<rect x="90" y="34" width="11" height="11" fill="#cf222e" rx="2"/>
-<text x="107" y="44" font-size="11.5" fill="#1f2328">before (M5: full subtree walk)</text>
-<rect x="320" y="34" width="11" height="11" fill="#1a7f37" rx="2"/>
-<text x="337" y="44" font-size="11.5" fill="#1f2328">after (M6: best-first)</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="430" viewBox="0 0 760 430" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif">
+<rect width="760" height="430" fill="#ffffff"/>
+<text x="78" y="26" font-size="16" font-weight="600" fill="#1f2328">Exact prefix p95, before and after the subtree-max optimisation</text>
+<text x="78" y="47" font-size="11.5" fill="#6e7781">log scale; same machine, same session</text>
+<rect x="78.0" y="64" width="11" height="11" fill="#cf222e" rx="2"/>
+<text x="95.0" y="74" font-size="11.5" fill="#1f2328">before: full subtree walk</text>
+<rect x="274.8" y="64" width="11" height="11" fill="#1a7f37" rx="2"/>
+<text x="291.8" y="74" font-size="11.5" fill="#1f2328">after: best-first</text>
+<line x1="78" y1="368.0" x2="734" y2="368.0" stroke="#d8dee4"/>
+<text x="70" y="372.0" font-size="11" fill="#6e7781" text-anchor="end">1 us</text>
+<line x1="78" y1="304.8" x2="734" y2="304.8" stroke="#d8dee4"/>
+<text x="70" y="308.8" font-size="11" fill="#6e7781" text-anchor="end">10 us</text>
+<line x1="78" y1="241.5" x2="734" y2="241.5" stroke="#d8dee4"/>
+<text x="70" y="245.5" font-size="11" fill="#6e7781" text-anchor="end">100 us</text>
+<line x1="78" y1="178.3" x2="734" y2="178.3" stroke="#d8dee4"/>
+<text x="70" y="182.3" font-size="11" fill="#6e7781" text-anchor="end">1 ms</text>
+<line x1="78" y1="115.0" x2="734" y2="115.0" stroke="#d8dee4"/>
+<text x="70" y="119.0" font-size="11" fill="#6e7781" text-anchor="end">10 ms</text>
+<line x1="78" y1="159.2" x2="734" y2="159.2" stroke="#6e7781" stroke-width="1" stroke-dasharray="5 4"/>
+<text x="730" y="154.2" font-size="10.5" fill="#6e7781" text-anchor="end">p95 target 2ms</text>
+<rect x="101.6" y="127.8" width="38.0" height="240.2" fill="#cf222e" rx="2"/>
+<rect x="147.6" y="298.9" width="38.0" height="69.1" fill="#1a7f37" rx="2"/>
+<text x="143.6" y="390.0" font-size="12" fill="#1f2328" text-anchor="middle">2</text>
+<text x="143.6" y="408.0" font-size="11.5" font-weight="700" fill="#1a7f37" text-anchor="middle">506x</text>
+<rect x="232.8" y="168.9" width="38.0" height="199.1" fill="#cf222e" rx="2"/>
+<rect x="278.8" y="304.8" width="38.0" height="63.2" fill="#1a7f37" rx="2"/>
+<text x="274.8" y="390.0" font-size="12" fill="#1f2328" text-anchor="middle">3</text>
+<text x="274.8" y="408.0" font-size="11.5" font-weight="700" fill="#1a7f37" text-anchor="middle">140x</text>
+<rect x="364.0" y="208.4" width="38.0" height="159.6" fill="#cf222e" rx="2"/>
+<rect x="410.0" y="313.0" width="38.0" height="55.0" fill="#1a7f37" rx="2"/>
+<text x="406.0" y="390.0" font-size="12" fill="#1f2328" text-anchor="middle">4</text>
+<text x="406.0" y="408.0" font-size="11.5" font-weight="700" fill="#1a7f37" text-anchor="middle">45x</text>
+<rect x="495.2" y="276.1" width="38.0" height="91.9" fill="#cf222e" rx="2"/>
+<rect x="541.2" y="328.6" width="38.0" height="39.4" fill="#1a7f37" rx="2"/>
+<text x="537.2" y="390.0" font-size="12" fill="#1f2328" text-anchor="middle">6</text>
+<text x="537.2" y="408.0" font-size="11.5" font-weight="700" fill="#1a7f37" text-anchor="middle">7x</text>
+<rect x="626.4" y="318.8" width="38.0" height="49.2" fill="#cf222e" rx="2"/>
+<rect x="672.4" y="350.4" width="38.0" height="17.6" fill="#1a7f37" rx="2"/>
+<text x="668.4" y="390.0" font-size="12" fill="#1f2328" text-anchor="middle">8</text>
+<text x="668.4" y="408.0" font-size="11.5" font-weight="700" fill="#1a7f37" text-anchor="middle">3x</text>
+<line x1="78" y1="368" x2="734" y2="368" stroke="#1f2328" stroke-width="1.2"/>
+<text x="406.0" y="422" font-size="12" fill="#6e7781" text-anchor="middle">prefix length (characters)</text>
 </svg>

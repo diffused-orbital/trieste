@@ -183,6 +183,10 @@ and no early exit.
 And it is checked, not asserted: `BM_Levenshtein_Equivalence` runs 40 queries
 across both budgets through both implementations and compares hit counts.
 
+*(These figures come from the M5 measurement run. M6 did not touch the fuzzy
+path, and a re-run afterwards produced 271× and 21× — the same code, roughly 10%
+of machine-to-machine variance. The lower figures are kept as the quoted ones.)*
+
 ```
 BM_Levenshtein_Equivalence   MISMATCHES=0   queries_checked=40
 ```
@@ -243,11 +247,11 @@ Treated as measurement goals rather than pass/fail gates:
 
 | Path | p95 | p99 | Verdict |
 |---|---|---|---|
-| Prefix ≥ 3 chars | ≤ 569 µs | ≤ 1.21 ms | ✅ comfortably |
-| Prefix = 2 chars | 2.22 ms | 3.90 ms | ⚠️ p95 misses; p99 passes |
-| Fuzzy E=1 | 68.6 µs | 89.8 µs | ✅ |
-| Fuzzy E=2 | 837.7 µs | 1.32 ms | ✅ |
-| N-gram prediction | 76.3 µs | 237.5 µs | ✅ |
+| Prefix ≥ 3 chars | ≤ 569 µs | ≤ 1.21 ms | meets, comfortably |
+| Prefix = 2 chars | 2.22 ms | 3.90 ms | p95 misses, p99 passes |
+| Fuzzy E=1 | 68.6 µs | 89.8 µs | meets |
+| Fuzzy E=2 | 837.7 µs | 1.32 ms | meets |
+| N-gram prediction | 76.3 µs | 237.5 µs | meets |
 
 **One miss, and it is the expected one.** Two-character prefixes overshoot the
 p95 budget by 11% (2.22 ms vs 2 ms), while still clearing p99. Everything else

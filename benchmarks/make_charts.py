@@ -28,22 +28,54 @@ MUTED = "#6e7781"
 GRID = "#d8dee4"
 SERIES = ["#0969da", "#cf222e", "#1a7f37", "#8250df"]
 
-W, H = 760, 420
-PAD_L, PAD_R, PAD_T, PAD_B = 78, 26, 52, 62
+W, H = 760, 430
+PAD_L, PAD_R, PAD_T, PAD_B = 78, 26, 96, 62
+
+# The header occupies three separate horizontal bands, none of which may overlap.
+# PAD_T is the top of the plot area and must sit below all of them.
+TITLE_Y = 26     # baseline
+CAPTION_Y = 47   # baseline
+LEGEND_Y = 64    # top of the swatch; text baseline sits at LEGEND_Y + 10
 
 
 def esc(s):
     return str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
-def header(title, subtitle):
-    return [
+def header(title, caption, legend=()):
+    """Title, an optional short caption, and a legend row -- each on its own line.
+
+    The legend is laid out here rather than by each chart so that spacing is
+    computed once from the actual label lengths. Fixed per-chart offsets were
+    what previously let long labels run into one another.
+    """
+    out = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" '
         f'viewBox="0 0 {W} {H}" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif">',
         f'<rect width="{W}" height="{H}" fill="{BG}"/>',
-        f'<text x="{PAD_L}" y="26" font-size="16" font-weight="600" fill="{FG}">{esc(title)}</text>',
-        f'<text x="{PAD_L}" y="44" font-size="11.5" fill="{MUTED}">{esc(subtitle)}</text>',
+        f'<text x="{PAD_L}" y="{TITLE_Y}" font-size="16" font-weight="600" '
+        f'fill="{FG}">{esc(title)}</text>',
     ]
+    if caption:
+        out.append(
+            f'<text x="{PAD_L}" y="{CAPTION_Y}" font-size="11.5" '
+            f'fill="{MUTED}">{esc(caption)}</text>'
+        )
+
+    # Advance by the measured width of each label: swatch (11) + gap (6) + text
+    # + separator (26). 6.15px per character approximates 11.5px sans-serif
+    # closely enough to keep entries clear of each other.
+    x = PAD_L
+    for label, colour in legend:
+        out.append(
+            f'<rect x="{x:.1f}" y="{LEGEND_Y}" width="11" height="11" fill="{colour}" rx="2"/>'
+        )
+        out.append(
+            f'<text x="{x + 17:.1f}" y="{LEGEND_Y + 10}" font-size="11.5" '
+            f'fill="{FG}">{esc(label)}</text>'
+        )
+        x += 17 + len(label) * 6.15 + 26
+    return out
 
 
 def log_ticks(lo, hi):
@@ -93,8 +125,8 @@ def chart_naive_vs_pruned():
 
     out = header(
         "Fuzzy search: naive full-dictionary vs trie-pruned",
-        "p50 latency per query, 108,008-term English corpus, log scale. Same queries, "
-        "identical results (0 mismatches).",
+        "p50 per query, 108,008-term corpus, log scale",
+        [("Naive O(N*M) scan", SERIES[0]), ("Trie + pruned DP walk", SERIES[1])],
     )
     for t in log_ticks(lo, hi):
         y = ypos(t)
@@ -131,12 +163,6 @@ def chart_naive_vs_pruned():
         )
 
     out.append(f'<line x1="{x0}" y1="{y1}" x2="{x1}" y2="{y1}" stroke="{FG}" stroke-width="1.2"/>')
-    for si, lbl in enumerate(["Naive O(N*M) scan", "Trie + pruned DP walk"]):
-        lx = x0 + 12 + si * 210
-        out.append(f'<rect x="{lx}" y="{PAD_T - 18}" width="11" height="11" fill="{SERIES[si]}" rx="2"/>')
-        out.append(
-            f'<text x="{lx + 17}" y="{PAD_T - 8}" font-size="11.5" fill="{FG}">{esc(lbl)}</text>'
-        )
     out.append("</svg>")
     return "\n".join(out)
 
@@ -171,8 +197,8 @@ def chart_latency_by_length():
 
     out = header(
         "Exact prefix Top-K latency vs prefix length",
-        "k=5, edit budget 0. Short prefixes sit above huge subtrees and M1 walks all of "
-        "them; the 2ms/5ms budget is drawn for reference.",
+        "k=5, edit budget 0, log scale",
+        [(name, colour) for name, _, colour in series],
     )
     for t in log_ticks(lo, hi):
         y = ypos(t)
@@ -208,10 +234,6 @@ def chart_latency_by_length():
         f'text-anchor="middle">prefix length (characters)</text>'
     )
     out.append(f'<line x1="{x0}" y1="{y1}" x2="{x1}" y2="{y1}" stroke="{FG}" stroke-width="1.2"/>')
-    for si, (name, _, colour) in enumerate(series):
-        lx = x0 + 12 + si * 66
-        out.append(f'<rect x="{lx}" y="{PAD_T - 18}" width="11" height="11" fill="{colour}" rx="2"/>')
-        out.append(f'<text x="{lx + 17}" y="{PAD_T - 8}" font-size="11.5" fill="{FG}">{name}</text>')
     out.append("</svg>")
     return "\n".join(out)
 
@@ -239,9 +261,9 @@ def chart_qps():
         return x0 + (x1 - x0) * (math.log2(t) / math.log2(16))
 
     out = header(
-        "Throughput vs thread count (aggregate, wall-clock)",
-        "Shared-lock read path. Dashed line is perfect scaling from the 2-thread point; "
-        "the 1-thread baseline is depressed by laptop power management.",
+        "Throughput vs thread count",
+        "aggregate queries/sec, wall-clock; dashed line is linear scaling from 2 threads",
+        [(name, SERIES[i % len(SERIES)]) for i, name in enumerate(sorted(by_workload))],
     )
     for i in range(0, 6):
         v = hi * i / 5
@@ -281,13 +303,6 @@ def chart_qps():
         f'text-anchor="middle">reader threads</text>'
     )
     out.append(f'<line x1="{x0}" y1="{y1}" x2="{x1}" y2="{y1}" stroke="{FG}" stroke-width="1.2"/>')
-    for si, name in enumerate(sorted(by_workload)):
-        lx = x0 + 12 + si * 160
-        out.append(
-            f'<rect x="{lx}" y="{PAD_T - 18}" width="11" height="11" '
-            f'fill="{SERIES[si % len(SERIES)]}" rx="2"/>'
-        )
-        out.append(f'<text x="{lx + 17}" y="{PAD_T - 8}" font-size="11.5" fill="{FG}">{esc(name)}</text>')
     out.append("</svg>")
     return "\n".join(out)
 
@@ -312,9 +327,9 @@ def chart_m6_before_after():
         return y1 - t * (y1 - y0)
 
     out = header(
-        "M6: exact prefix p95, before and after subtree-max best-first",
-        "Log scale. The 2-character case -- the only measurement that missed its "
-        "budget -- improves 506x and drops far under the 2ms line.",
+        "Exact prefix p95, before and after the subtree-max optimisation",
+        "log scale; same machine, same session",
+        [("before: full subtree walk", SERIES[1]), ("after: best-first", SERIES[2])],
     )
     for t in log_ticks(lo, hi):
         y = ypos(t)
@@ -359,13 +374,6 @@ def chart_m6_before_after():
         f'<text x="{(x0 + x1) / 2:.1f}" y="{H - 8}" font-size="12" fill="{MUTED}" '
         f'text-anchor="middle">prefix length (characters)</text>'
     )
-    for si, lbl in enumerate(["before (M5: full subtree walk)", "after (M6: best-first)"]):
-        lx = x0 + 12 + si * 230
-        out.append(
-            f'<rect x="{lx}" y="{PAD_T - 18}" width="11" height="11" '
-            f'fill="{SERIES[1] if si == 0 else SERIES[2]}" rx="2"/>'
-        )
-        out.append(f'<text x="{lx + 17}" y="{PAD_T - 8}" font-size="11.5" fill="{FG}">{esc(lbl)}</text>')
     out.append("</svg>")
     return "\n".join(out)
 
