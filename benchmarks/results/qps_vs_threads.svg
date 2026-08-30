@@ -1,50 +1,50 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="760" height="420" viewBox="0 0 760 420" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif">
-<rect width="760" height="420" fill="#ffffff"/>
-<text x="78" y="26" font-size="16" font-weight="600" fill="#1f2328">Throughput vs thread count (aggregate, wall-clock)</text>
-<text x="78" y="44" font-size="11.5" fill="#6e7781">Shared-lock read path. Dashed line is perfect scaling from the 2-thread point; the 1-thread baseline is depressed by laptop power management.</text>
-<line x1="78" y1="358.0" x2="734" y2="358.0" stroke="#d8dee4"/>
-<text x="70" y="362.0" font-size="11" fill="#6e7781" text-anchor="end">0k</text>
-<line x1="78" y1="296.8" x2="734" y2="296.8" stroke="#d8dee4"/>
-<text x="70" y="300.8" font-size="11" fill="#6e7781" text-anchor="end">48k</text>
-<line x1="78" y1="235.6" x2="734" y2="235.6" stroke="#d8dee4"/>
-<text x="70" y="239.6" font-size="11" fill="#6e7781" text-anchor="end">96k</text>
-<line x1="78" y1="174.4" x2="734" y2="174.4" stroke="#d8dee4"/>
-<text x="70" y="178.4" font-size="11" fill="#6e7781" text-anchor="end">144k</text>
-<line x1="78" y1="113.2" x2="734" y2="113.2" stroke="#d8dee4"/>
-<text x="70" y="117.2" font-size="11" fill="#6e7781" text-anchor="end">192k</text>
-<line x1="78" y1="52.0" x2="734" y2="52.0" stroke="#d8dee4"/>
-<text x="70" y="56.0" font-size="11" fill="#6e7781" text-anchor="end">240k</text>
-<polyline points="242.0,52.0 406.0,52.0 570.0,52.0 734.0,52.0" fill="none" stroke="#6e7781" stroke-width="1.4" stroke-dasharray="6 5"/>
-<polyline points="78.0,259.7 242.0,113.0 406.0,-76.4 570.0,-525.5 734.0,-895.7" fill="none" stroke="#0969da" stroke-width="2.4"/>
-<circle cx="78.0" cy="259.7" r="3.8" fill="#0969da"/>
-<circle cx="242.0" cy="113.0" r="3.8" fill="#0969da"/>
-<circle cx="406.0" cy="-76.4" r="3.8" fill="#0969da"/>
-<circle cx="570.0" cy="-525.5" r="3.8" fill="#0969da"/>
-<circle cx="734.0" cy="-895.7" r="3.8" fill="#0969da"/>
-<text x="728.0" y="-905.7" font-size="11.5" font-weight="600" fill="#0969da" text-anchor="end">983k</text>
-<polyline points="78.0,170.4 242.0,-162.5 406.0,-504.1 570.0,-873.1 734.0,-907.4" fill="none" stroke="#cf222e" stroke-width="2.4"/>
-<circle cx="78.0" cy="170.4" r="3.8" fill="#cf222e"/>
-<circle cx="242.0" cy="-162.5" r="3.8" fill="#cf222e"/>
-<circle cx="406.0" cy="-504.1" r="3.8" fill="#cf222e"/>
-<circle cx="570.0" cy="-873.1" r="3.8" fill="#cf222e"/>
-<circle cx="734.0" cy="-907.4" r="3.8" fill="#cf222e"/>
-<text x="728.0" y="-917.4" font-size="11.5" font-weight="600" fill="#cf222e" text-anchor="end">992k</text>
-<polyline points="78.0,350.9 406.0,243.7 734.0,129.0" fill="none" stroke="#1a7f37" stroke-width="2.4"/>
-<circle cx="78.0" cy="350.9" r="3.8" fill="#1a7f37"/>
-<circle cx="406.0" cy="243.7" r="3.8" fill="#1a7f37"/>
-<circle cx="734.0" cy="129.0" r="3.8" fill="#1a7f37"/>
-<text x="728.0" y="119.0" font-size="11.5" font-weight="600" fill="#1a7f37" text-anchor="end">180k</text>
-<text x="78.0" y="380.0" font-size="12" fill="#1f2328" text-anchor="middle">1</text>
-<text x="242.0" y="380.0" font-size="12" fill="#1f2328" text-anchor="middle">2</text>
-<text x="406.0" y="380.0" font-size="12" fill="#1f2328" text-anchor="middle">4</text>
-<text x="570.0" y="380.0" font-size="12" fill="#1f2328" text-anchor="middle">8</text>
-<text x="734.0" y="380.0" font-size="12" fill="#1f2328" text-anchor="middle">16</text>
-<text x="406.0" y="402.0" font-size="12" fill="#6e7781" text-anchor="middle">reader threads</text>
-<line x1="78" y1="358" x2="734" y2="358" stroke="#1f2328" stroke-width="1.2"/>
-<rect x="90" y="34" width="11" height="11" fill="#0969da" rx="2"/>
-<text x="107" y="44" font-size="11.5" fill="#1f2328">MixedQueries</text>
-<rect x="250" y="34" width="11" height="11" fill="#cf222e" rx="2"/>
-<text x="267" y="44" font-size="11.5" fill="#1f2328">PrefixReads</text>
-<rect x="410" y="34" width="11" height="11" fill="#1a7f37" rx="2"/>
-<text x="427" y="44" font-size="11.5" fill="#1f2328">ReadsUnderWriter</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="430" viewBox="0 0 760 430" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif">
+<rect width="760" height="430" fill="#ffffff"/>
+<text x="78" y="26" font-size="16" font-weight="600" fill="#1f2328">Throughput vs thread count</text>
+<text x="78" y="47" font-size="11.5" fill="#6e7781">aggregate queries/sec, wall-clock; dashed line is linear scaling from 2 threads</text>
+<rect x="78.0" y="64" width="11" height="11" fill="#0969da" rx="2"/>
+<text x="95.0" y="74" font-size="11.5" fill="#1f2328">MixedQueries</text>
+<rect x="194.8" y="64" width="11" height="11" fill="#cf222e" rx="2"/>
+<text x="211.8" y="74" font-size="11.5" fill="#1f2328">PrefixReads</text>
+<rect x="305.5" y="64" width="11" height="11" fill="#1a7f37" rx="2"/>
+<text x="322.5" y="74" font-size="11.5" fill="#1f2328">ReadsUnderWriter</text>
+<line x1="78" y1="368.0" x2="734" y2="368.0" stroke="#d8dee4"/>
+<text x="70" y="372.0" font-size="11" fill="#6e7781" text-anchor="end">0k</text>
+<line x1="78" y1="313.6" x2="734" y2="313.6" stroke="#d8dee4"/>
+<text x="70" y="317.6" font-size="11" fill="#6e7781" text-anchor="end">48k</text>
+<line x1="78" y1="259.2" x2="734" y2="259.2" stroke="#d8dee4"/>
+<text x="70" y="263.2" font-size="11" fill="#6e7781" text-anchor="end">96k</text>
+<line x1="78" y1="204.8" x2="734" y2="204.8" stroke="#d8dee4"/>
+<text x="70" y="208.8" font-size="11" fill="#6e7781" text-anchor="end">144k</text>
+<line x1="78" y1="150.4" x2="734" y2="150.4" stroke="#d8dee4"/>
+<text x="70" y="154.4" font-size="11" fill="#6e7781" text-anchor="end">192k</text>
+<line x1="78" y1="96.0" x2="734" y2="96.0" stroke="#d8dee4"/>
+<text x="70" y="100.0" font-size="11" fill="#6e7781" text-anchor="end">240k</text>
+<polyline points="242.0,96.0 406.0,96.0 570.0,96.0 734.0,96.0" fill="none" stroke="#6e7781" stroke-width="1.4" stroke-dasharray="6 5"/>
+<polyline points="78.0,280.6 242.0,150.2 406.0,-18.1 570.0,-417.4 734.0,-746.4" fill="none" stroke="#0969da" stroke-width="2.4"/>
+<circle cx="78.0" cy="280.6" r="3.8" fill="#0969da"/>
+<circle cx="242.0" cy="150.2" r="3.8" fill="#0969da"/>
+<circle cx="406.0" cy="-18.1" r="3.8" fill="#0969da"/>
+<circle cx="570.0" cy="-417.4" r="3.8" fill="#0969da"/>
+<circle cx="734.0" cy="-746.4" r="3.8" fill="#0969da"/>
+<text x="728.0" y="-756.4" font-size="11.5" font-weight="600" fill="#0969da" text-anchor="end">983k</text>
+<polyline points="78.0,201.3 242.0,-94.6 406.0,-398.3 570.0,-726.3 734.0,-756.8" fill="none" stroke="#cf222e" stroke-width="2.4"/>
+<circle cx="78.0" cy="201.3" r="3.8" fill="#cf222e"/>
+<circle cx="242.0" cy="-94.6" r="3.8" fill="#cf222e"/>
+<circle cx="406.0" cy="-398.3" r="3.8" fill="#cf222e"/>
+<circle cx="570.0" cy="-726.3" r="3.8" fill="#cf222e"/>
+<circle cx="734.0" cy="-756.8" r="3.8" fill="#cf222e"/>
+<text x="728.0" y="-766.8" font-size="11.5" font-weight="600" fill="#cf222e" text-anchor="end">992k</text>
+<polyline points="78.0,361.7 406.0,266.4 734.0,164.4" fill="none" stroke="#1a7f37" stroke-width="2.4"/>
+<circle cx="78.0" cy="361.7" r="3.8" fill="#1a7f37"/>
+<circle cx="406.0" cy="266.4" r="3.8" fill="#1a7f37"/>
+<circle cx="734.0" cy="164.4" r="3.8" fill="#1a7f37"/>
+<text x="728.0" y="154.4" font-size="11.5" font-weight="600" fill="#1a7f37" text-anchor="end">180k</text>
+<text x="78.0" y="390.0" font-size="12" fill="#1f2328" text-anchor="middle">1</text>
+<text x="242.0" y="390.0" font-size="12" fill="#1f2328" text-anchor="middle">2</text>
+<text x="406.0" y="390.0" font-size="12" fill="#1f2328" text-anchor="middle">4</text>
+<text x="570.0" y="390.0" font-size="12" fill="#1f2328" text-anchor="middle">8</text>
+<text x="734.0" y="390.0" font-size="12" fill="#1f2328" text-anchor="middle">16</text>
+<text x="406.0" y="412.0" font-size="12" fill="#6e7781" text-anchor="middle">reader threads</text>
+<line x1="78" y1="368" x2="734" y2="368" stroke="#1f2328" stroke-width="1.2"/>
 </svg>

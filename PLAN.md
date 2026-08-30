@@ -12,7 +12,7 @@ not reshape it.
 
 ---
 
-## M1 — Scaffold, repo setup, Trie, exact prefix, Top-K  ✅ done
+## M1 — Scaffold, repo setup, Trie, exact prefix, Top-K  (done)
 
 - Project layout, CMake building library + tests + demo CLI, FetchContent for
   GoogleTest and Google Benchmark.
@@ -38,7 +38,7 @@ not reshape it.
 - *Normalisation:* trim, lowercase ASCII, collapse internal whitespace runs —
   applied symmetrically on insert and on query.
 
-## M2 — Fuzzy search, bounded edit distance (E ≤ 2)  ✅ done
+## M2 — Fuzzy search, bounded edit distance (E ≤ 2)  (done)
 
 One Levenshtein DP row carried down each trie edge, with subtree pruning.
 Fires only when exact prefix matches < K, so the exact path stays the fast
@@ -99,7 +99,7 @@ wide. Graduated fuzziness (E=0 for ≤2 chars, E=1 for 3–4, E=2 for ≥5, whic
 what Elasticsearch's `AUTO` does) would bound it properly. Deferred rather than
 guessed: it changes result semantics, so it should be driven by M5 numbers.
 
-## M3 — N-gram context  ✅ done
+## M3 — N-gram context  (done)
 
 - Bigram/trigram Markov model (`NgramModel`) over the corpus for next-token
   prediction.
@@ -134,7 +134,7 @@ guessed: it changes result semantics, so it should be driven by M5 numbers.
   frequency signal rather than improve it at this scale; deferred if benchmarks
   flag it.
 
-## M4 — Concurrency  ✅ done
+## M4 — Concurrency  (done)
 
 One `std::shared_mutex` guards the trie (and, when added, the n-gram model).
 Shared lock on every read path; exclusive lock on every write path.  The
@@ -181,7 +181,7 @@ cmake --build --preset unix
 ctest --preset unix
 ```
 
-## M5 — Benchmark suite  ✅ done
+## M5 — Benchmark suite  (done)
 
 Full write-up and charts in [RESULTS.md](RESULTS.md).
 
@@ -219,7 +219,7 @@ Full write-up and charts in [RESULTS.md](RESULTS.md).
 - A single continuous writer costs ~4× read throughput.
 - Spec targets met everywhere except 2-character prefixes (p95 2.22 ms vs 2 ms).
 
-## M6 — Memory and latency optimisation  ✅ done
+## M6 — Memory and latency optimisation  (done)
 
 Driven by M5's numbers. Full before/after in [RESULTS.md](RESULTS.md#8-m6--subtree-max-best-first-descent).
 
