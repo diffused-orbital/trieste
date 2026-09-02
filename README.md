@@ -437,7 +437,7 @@ data/              sample and benchmark corpora
 ```
 
 `RESULTS.md` is the full benchmark report. `PLAN.md` records the six milestones,
-the decisions taken at each, and what was deliberately left undone.
+the decisions taken at each of those, and what was deliberately left undone.
 
 ## License
 
